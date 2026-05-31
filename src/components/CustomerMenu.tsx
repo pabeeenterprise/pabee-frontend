@@ -26,14 +26,10 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           const menuRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/menu`);
           if (menuRes.ok) {
             const menuData = await menuRes.json();
-            
-            console.log("SERVER DATA:", menuData); // Spying on the data
-            
-            // 👇 THE CRITICAL LINE 👇
+                        
             // We must explicitly use .items because your server sends { items: [...] }
             if (menuData.items && Array.isArray(menuData.items)) {
                setMenu(menuData.items);
-               console.log("Successfully saved 5 items to React!");
             } else {
                setMenu([]);
             }

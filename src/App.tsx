@@ -8,13 +8,14 @@ import VendorLogin from './components/VendorLogin';
 import QRScanner from './components/QRScanner'; 
 
 function App() {
-  // 👇 Removed 'admin' from the allowed views
   const [currentView, setCurrentView] = useState<'scanner' | 'menu' | 'checkout' | 'dashboard'>('scanner');
-
   const [authToken, setAuthToken] = useState<string | null>(null);
   
   const [vendorId, setVendorId] = useState("spice-street-kitchen");
   const [tableId, setTableId] = useState("Table-Unknown");
+
+  // 👇 NEW: Security flag to lock customers out of Dev Tools
+  const [isCustomerMode, setIsCustomerMode] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -25,6 +26,7 @@ function App() {
       setVendorId(scannedVendor);
       setTableId(scannedTable);
       setCurrentView('menu'); 
+      setIsCustomerMode(true); // Lock them into the customer experience!
     }
   }, []);
 
@@ -56,32 +58,34 @@ function App() {
   return (
     <CartProvider>
       <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
-      <div className="min-h-screen bg-bg pb-10">
+      <div className="min-h-screen bg-[#0a0a0a] pb-10">
         
-        {/* DEV TOGGLE BAR */}
-        <div className="bg-text text-white p-2 flex justify-center items-center gap-6 text-xs font-bold overflow-x-auto relative z-50">
-          <span className="text-muted hidden md:inline">DEV TOOLS:</span>
-          
-          <button 
-            onClick={() => setCurrentView('scanner')} 
-            className={`hover:text-blue whitespace-nowrap ${['scanner', 'menu', 'checkout'].includes(currentView) ? 'text-blue' : ''}`}
-          >
-            📱 Customer App
-          </button>
-          
-          <button 
-            onClick={() => setCurrentView('dashboard')} 
-            className={`hover:text-green whitespace-nowrap ${currentView === 'dashboard' ? 'text-green' : ''}`}
-          >
-            📈 Vendor Dashboard
-          </button>
-          
-          {/* 👇 Super Admin button was deleted from here */}
-          
-          {authToken && (
-            <button onClick={handleLogout} className="absolute right-4 text-red bg-white/10 px-2 py-1 rounded">Logout</button>
-          )}
-        </div>
+        {/* DEV TOGGLE BAR (Only shows if NOT in Customer Mode) */}
+        {!isCustomerMode && (
+          <div className="bg-[#1A1A1A] border-b border-gray-800 text-white p-2 flex justify-center items-center gap-6 text-xs font-bold overflow-x-auto relative z-50">
+            <span className="text-gray-500 hidden md:inline">DEV TOOLS:</span>
+            
+            <button 
+              onClick={() => setCurrentView('scanner')} 
+              className={`hover:text-blue-400 whitespace-nowrap ${['scanner', 'menu', 'checkout'].includes(currentView) ? 'text-blue-400' : ''}`}
+            >
+              📱 Customer App
+            </button>
+            
+            <button 
+              onClick={() => setCurrentView('dashboard')} 
+              className={`hover:text-green-400 whitespace-nowrap ${currentView === 'dashboard' ? 'text-green-400' : ''}`}
+            >
+              📈 Vendor Dashboard
+            </button>
+            
+            {authToken && (
+              <button onClick={handleLogout} className="absolute right-4 text-red-400 bg-red-400/10 hover:bg-red-400/20 px-2 py-1 rounded transition-colors">
+                Logout
+              </button>
+            )}
+          </div>
+        )}
 
         {/* View Routing */}
         {currentView === 'scanner' && !showLogin && <QRScanner onScanSuccess={handleScanSuccess} />}
@@ -93,8 +97,6 @@ function App() {
         {showLogin && <VendorLogin vendorId={vendorId} onLoginSuccess={handleSuccessfulLogin} />}
         {currentView === 'dashboard' && authToken && <VendorDashboard vendorId={vendorId} />}
         
-        {/* 👇 Super Admin route was deleted from here */}
-
       </div>
     </CartProvider>
   );

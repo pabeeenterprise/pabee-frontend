@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function MyQRCode({ vendorId }: { vendorId: string }) {
-  // Allow the vendor to generate QR codes for specific tables!
   const [tableId, setTableId] = useState('Table-1');
 
-  // This is the EXACT string our Customer App Scanner is looking for
-// Example: https://pabee.vercel.app/?vendor=spice-street-kitchen&table=Table-1
-const qrPayload = `https://project-r73rm.vercel.app/?vendor=${vendorId}&table=${tableId}`;
+  // 👇 THE FIX: Automatically grabs your current domain (localhost or Vercel!)
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://project-r73rm.vercel.app';
+  
+  // Now it perfectly matches what App.tsx is looking for
+  const qrPayload = `${baseUrl}/?vendor=${vendorId}&table=${tableId}`;
 
   return (
     <div className="flex flex-col gap-6 h-full font-sans">
@@ -76,4 +77,4 @@ const qrPayload = `https://project-r73rm.vercel.app/?vendor=${vendorId}&table=${
       
     </div>
   );
-}   
+}

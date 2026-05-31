@@ -26,6 +26,10 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
         const menuRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/menu`);
         if (menuRes.ok) {
           const menuData = await menuRes.json();
+
+          // 👇 ADD THIS SPY LINE 👇
+          console.log("THE SERVER SENT THIS:", menuData);
+
           // Depending on your backend, it might be in { menu: [...] } or just an array
           setMenu(menuData.menu || []);
         }

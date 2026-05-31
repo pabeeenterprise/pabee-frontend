@@ -151,7 +151,7 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
             {data.topItems.map((item, i) => (
               <div key={item.id} className={`flex items-center justify-between pb-3 ${i !== data.topItems.length - 1 ? 'border-b border-[#1F2330]' : ''}`}>
                 <div className="flex items-center gap-4">
-                  <span className="text-[#E5B35C] font-bold text-sm w-4">{item.id}</span>
+                  <span className="text-[#E5B35C] font-bold text-sm w-4">{i + 1}</span>
                   <span className="text-gray-200 text-sm font-medium">{item.name}</span>
                 </div>
                 <div className="text-right">

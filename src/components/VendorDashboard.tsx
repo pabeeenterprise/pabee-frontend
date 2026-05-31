@@ -28,7 +28,7 @@ export default function VendorDashboard({ vendorId }: { vendorId: string }) {
           {activeTab === 'live-orders' && <LiveOrders vendorId={vendorId} />}
           {activeTab === 'overview' && <Overview vendorId={vendorId} />}
           {activeTab === 'menu-editor' && <MenuEditor vendorId={vendorId} />}
-          {activeTab === 'Offers & promos' && <OffersPromos vendorId={vendorId} />}
+          {activeTab === 'offers' && <OffersPromos vendorId={vendorId} />}
           {activeTab === 'analytics' && <Analytics vendorId={vendorId} />}
           {activeTab === 'qr-code' && <MyQRCode vendorId={vendorId} />}
           {activeTab === 'settings' && <div className="p-8 text-gray-500">Settings coming next...</div>}

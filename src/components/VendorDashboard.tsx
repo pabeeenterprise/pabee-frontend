@@ -6,6 +6,7 @@ import MenuEditor from './MenuEditor';
 import Analytics from './Analytics';
 import OffersPromos from './OffersPromos';
 import MyQRCode from './MyQRCode';
+import Offers from './Offers';
 
 export default function VendorDashboard({ vendorId }: { vendorId: string }) {
   // The master state that remembers which tab we are looking at
@@ -29,6 +30,7 @@ export default function VendorDashboard({ vendorId }: { vendorId: string }) {
           {activeTab === 'analytics' && <Analytics vendorId={vendorId} />}
           {activeTab === 'qr-code' && <MyQRCode vendorId={vendorId} />}
           {activeTab === 'settings' && <div className="p-8 text-gray-500">Settings coming next...</div>}
+          {activeTab === 'Offers & promos' && <Offers vendorId={vendorId} />}
         </main>
 
       </div>

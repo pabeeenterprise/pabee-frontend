@@ -14,20 +14,28 @@ function App() {
   const [vendorId, setVendorId] = useState("spice-street-kitchen");
   const [tableId, setTableId] = useState("Table-Unknown");
 
-  // 👇 NEW: Security flag to lock customers out of Dev Tools
-  const [isCustomerMode, setIsCustomerMode] = useState(false);
+  // 🛡️ SECURITY FLAGS
+  const [isAdminMode, setIsAdminMode] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const scannedVendor = params.get('vendor');
     const scannedTable = params.get('table');
+    
+    // 👇 THE SECRET DOOR: Checks if the URL has ?admin=true
+    const secretAdminKey = params.get('admin');
 
-    if (scannedVendor && scannedTable) {
+    if (secretAdminKey === 'true') {
+      // 1. The Vendor opened their secret bookmark
+      setIsAdminMode(true);
+      setCurrentView('dashboard');
+    } else if (scannedVendor && scannedTable) {
+      // 2. A Customer scanned a real table sticker
       setVendorId(scannedVendor);
       setTableId(scannedTable);
       setCurrentView('menu'); 
-      setIsCustomerMode(true); // Lock them into the customer experience!
     }
+    // 3. If neither is true, they stay on the locked-down 'scanner' view.
   }, []);
 
   useEffect(() => {
@@ -43,6 +51,7 @@ function App() {
   const handleLogout = () => {
     setAuthToken(null);
     localStorage.removeItem(`pabee_token_${vendorId}`);
+    // Boot them back to the scanner when they log out
     setCurrentView('scanner');
   };
 
@@ -58,45 +67,34 @@ function App() {
   return (
     <CartProvider>
       <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
-      <div className="min-h-screen bg-[#0a0a0a] pb-10">
+      <div className="min-h-screen bg-[#0a0a0a] pb-10 relative">
         
-        {/* DEV TOGGLE BAR (Only shows if NOT in Customer Mode) */}
-        {!isCustomerMode && (
-          <div className="bg-[#1A1A1A] border-b border-gray-800 text-white p-2 flex justify-center items-center gap-6 text-xs font-bold overflow-x-auto relative z-50">
-            <span className="text-gray-500 hidden md:inline">DEV TOOLS:</span>
-            
-            <button 
-              onClick={() => setCurrentView('scanner')} 
-              className={`hover:text-blue-400 whitespace-nowrap ${['scanner', 'menu', 'checkout'].includes(currentView) ? 'text-blue-400' : ''}`}
-            >
-              📱 Customer App
-            </button>
-            
-            <button 
-              onClick={() => setCurrentView('dashboard')} 
-              className={`hover:text-green-400 whitespace-nowrap ${currentView === 'dashboard' ? 'text-green-400' : ''}`}
-            >
-              📈 Vendor Dashboard
-            </button>
-            
-            {authToken && (
-              <button onClick={handleLogout} className="absolute right-4 text-red-400 bg-red-400/10 hover:bg-red-400/20 px-2 py-1 rounded transition-colors">
-                Logout
-              </button>
-            )}
-          </div>
-        )}
+        {/* 🔥 DEV TOOLS ARE COMPLETELY DELETED 🔥 
+          No one can click a button to see the dashboard anymore.
+        */}
 
-        {/* View Routing */}
+        {/* --- CUSTOMER ROUTES --- */}
         {currentView === 'scanner' && !showLogin && <QRScanner onScanSuccess={handleScanSuccess} />}
         
         {currentView === 'menu' && !showLogin && <CustomerMenu vendorId={vendorId} onGoToCheckout={() => setCurrentView('checkout')} />}
         
         {currentView === 'checkout' && !showLogin && <Checkout vendorId={vendorId} tableId={tableId} onBack={() => setCurrentView('menu')} />}
         
-        {showLogin && <VendorLogin vendorId={vendorId} onLoginSuccess={handleSuccessfulLogin} />}
-        {currentView === 'dashboard' && authToken && <VendorDashboard vendorId={vendorId} />}
+        {/* --- VENDOR ROUTES (Protected by the Secret Door) --- */}
+        {showLogin && isAdminMode && <VendorLogin vendorId={vendorId} onLoginSuccess={handleSuccessfulLogin} />}
         
+        {currentView === 'dashboard' && authToken && isAdminMode && (
+          <div className="h-full">
+             {/* A discrete logout button just for the vendor */}
+             <div className="bg-[#121212] p-2 flex justify-end px-6 border-b border-gray-800">
+               <button onClick={handleLogout} className="text-red-400 text-xs font-bold bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded-lg transition-colors">
+                 Logout Vendor
+               </button>
+             </div>
+             <VendorDashboard vendorId={vendorId} />
+          </div>
+        )}
+
       </div>
     </CartProvider>
   );

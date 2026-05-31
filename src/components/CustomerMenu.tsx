@@ -27,7 +27,7 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
         if (menuRes.ok) {
           const menuData = await menuRes.json();
           // Depending on your backend, it might be in { menu: [...] } or just an array
-          setMenu(menuData.menu || menuData || []);
+          setMenu(menuData.menu || []);
         }
 
         // 2. Fetch Active Promos

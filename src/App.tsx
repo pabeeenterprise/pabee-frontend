@@ -49,10 +49,16 @@ function App() {
   };
 
   const handleLogout = () => {
+    // 1. Clear the tokens
     setAuthToken(null);
     localStorage.removeItem(`pabee_token_${vendorId}`);
-    // Boot them back to the scanner when they log out
+    
+    // 2. Reset the security flags
+    setIsAdminMode(false);
     setCurrentView('scanner');
+
+    // 3. Scrub the "?admin=true" right out of the browser URL silently!
+    window.history.replaceState({}, '', window.location.pathname);
   };
 
   const handleScanSuccess = (scannedVendor: string, scannedTable: string) => {

@@ -11,9 +11,6 @@ export default function VendorDashboard({ vendorId }: { vendorId: string }) {
   // The master state that remembers which tab we are looking at
   const [activeTab, setActiveTab] = useState('live-orders');
 
-  // Add this one line to spy on the button clicks!
-  console.log("The current tab ID is:", activeTab);
-
   return (
     <div className="min-h-screen bg-[#0B0E14] text-gray-200 font-sans flex overflow-hidden">
       

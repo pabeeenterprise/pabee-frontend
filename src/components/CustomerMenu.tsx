@@ -15,21 +15,39 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
   const { addToCart, cartCount } = useCart();
+  
+  // Promo state
+  const [activePromoBanner, setActivePromoBanner] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchMenu = async () => {
+    const fetchMenuAndPromos = async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/menu`);
-        if (!res.ok) throw new Error("Failed to fetch menu");
-        const data = await res.json();
-        setMenu(data.items);
+        // 1. Fetch the Food Menu (Restored!)
+        const menuRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/menu`);
+        if (menuRes.ok) {
+          const menuData = await menuRes.json();
+          // Depending on your backend, it might be in { menu: [...] } or just an array
+          setMenu(menuData.menu || menuData || []);
+        }
+
+        // 2. Fetch Active Promos
+        const promoRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos`);
+        if (promoRes.ok) {
+          const promoData = await promoRes.json();
+          const active = promoData.promos?.find((p: any) => p.isActive);
+          if (active) {
+            const discountText = active.type === 'FLAT' ? `₹${active.value} OFF` : `${active.value}% OFF`;
+            setActivePromoBanner(`🎉 Use code ${active.code} for ${discountText} on orders over ₹${active.minOrderValue}!`);
+          }
+        }
       } catch (err) {
-        console.error(err);
+        console.error("Failed to load data", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchMenu();
+
+    fetchMenuAndPromos();
   }, [vendorId]);
 
   if (loading) {
@@ -48,6 +66,13 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-gray-100 pb-24 font-sans">
       
+      {/* --- PROMO BANNER (Exactly here at the top!) --- */}
+      {activePromoBanner && (
+        <div className="bg-[#E55B3C] text-white text-xs font-bold text-center py-2 px-4 shadow-md tracking-wide">
+          {activePromoBanner}
+        </div>
+      )}
+
       {/* Header & Sticky Category Bar */}
       <div className="sticky top-0 bg-[#121212]/95 backdrop-blur-md border-b border-gray-800 z-10 shadow-lg">
         <div className="p-4 flex flex-col items-center border-b border-gray-800/50">
@@ -78,47 +103,51 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
 
       {/* Product Grid */}
       <div className="p-4 flex flex-col gap-4 max-w-3xl mx-auto">
-        {displayedItems.map(item => (
-          <div key={item.id} className="bg-[#1A1A1A] rounded-2xl border border-gray-800 p-4 flex gap-4 transition-transform active:scale-[0.98]">
-            
-            {/* Details Section */}
-            <div className="flex flex-col flex-grow justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  {/* Veg Tag */}
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
-                    item.veg ? 'bg-green-900/30 text-green-400 border-green-800' : 'bg-red-900/30 text-red-400 border-red-800'
-                  }`}>
-                    {item.veg ? 'Veg' : 'Non-Veg'}
-                  </span>
+        {displayedItems.length === 0 ? (
+           <p className="text-center text-gray-500 my-10">No items available in this category.</p>
+        ) : (
+          displayedItems.map(item => (
+            <div key={item.id} className="bg-[#1A1A1A] rounded-2xl border border-gray-800 p-4 flex gap-4 transition-transform active:scale-[0.98]">
+              
+              {/* Details Section */}
+              <div className="flex flex-col flex-grow justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    {/* Veg Tag */}
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
+                      item.veg ? 'bg-green-900/30 text-green-400 border-green-800' : 'bg-red-900/30 text-red-400 border-red-800'
+                    }`}>
+                      {item.veg ? 'Veg' : 'Non-Veg'}
+                    </span>
+                  </div>
+                  
+                  <h3 className="font-bold text-gray-100 text-lg">{item.name}</h3>
+                  <p className="text-xs text-gray-400 mt-1 line-clamp-2">{item.prep}</p>
                 </div>
                 
-                <h3 className="font-bold text-gray-100 text-lg">{item.name}</h3>
-                <p className="text-xs text-gray-400 mt-1 line-clamp-2">{item.prep}</p>
+                <div className="flex items-center mt-4">
+                  <span className="font-bold text-[#E55B3C] text-lg">₹{item.price}</span>
+                </div>
+              </div>
+
+              {/* Right Side: Image Placeholder & Button */}
+              <div className="flex flex-col items-end justify-between shrink-0">
+                 <div className="w-20 h-20 bg-gray-800/50 rounded-xl flex items-center justify-center text-3xl mb-2 border border-gray-700/50">
+                   {/* Fallback emojis based on veg status */}
+                   {item.veg ? '🥗' : '🍗'}
+                 </div>
+                 
+                 <button 
+                  onClick={() => addToCart(item)} 
+                  className="bg-[#E55B3C]/10 text-[#E55B3C] border border-[#E55B3C]/30 h-8 w-8 rounded-lg font-bold flex items-center justify-center text-xl hover:bg-[#E55B3C] hover:text-white transition-colors"
+                 >
+                  +
+                 </button>
               </div>
               
-              <div className="flex items-center mt-4">
-                <span className="font-bold text-[#E55B3C] text-lg">₹{item.price}</span>
-              </div>
             </div>
-
-            {/* Right Side: Image Placeholder & Button */}
-            <div className="flex flex-col items-end justify-between shrink-0">
-               <div className="w-20 h-20 bg-gray-800/50 rounded-xl flex items-center justify-center text-3xl mb-2 border border-gray-700/50">
-                  {/* Fallback emojis based on veg status */}
-                  {item.veg ? '🥗' : '🍗'}
-               </div>
-               
-               <button 
-                onClick={() => addToCart(item)} 
-                className="bg-[#E55B3C]/10 text-[#E55B3C] border border-[#E55B3C]/30 h-8 w-8 rounded-lg font-bold flex items-center justify-center text-xl hover:bg-[#E55B3C] hover:text-white transition-colors"
-               >
-                +
-               </button>
-            </div>
-            
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Floating Checkout Bar */}

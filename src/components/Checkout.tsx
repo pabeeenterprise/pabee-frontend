@@ -13,14 +13,44 @@ const loadRazorpayScript = () => {
 };
 
 export default function Checkout({ vendorId, tableId, onBack }: { vendorId: string, tableId: string, onBack: () => void }) {
-    const { cart, cartTotal, clearCart } = useCart();
+  const { cart, cartTotal, clearCart } = useCart();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'ONLINE' | 'CASH'>('ONLINE');
 
-  // Standard Indian restaurant tax/fee structure
+  // --- NEW PROMO STATES ---
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState<{ amount: number, code: string } | null>(null);
+  const [promoMessage, setPromoMessage] = useState({ text: '', type: '' });
+
+  // --- UPDATED MATH ---
   const gst = Math.round(cartTotal * 0.05); // 5% GST on food
   const platformFee = 5;
-  const grandTotal = cartTotal + gst + platformFee;
+  const discountAmount = appliedDiscount ? appliedDiscount.amount : 0;
+  // Subtract discount from the total!
+  const grandTotal = cartTotal - discountAmount + gst + platformFee; 
+
+  // --- VERIFY PROMO FUNCTION ---
+  const handleApplyPromo = async () => {
+    if (!promoCodeInput.trim()) return;
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoCodeInput, cartTotal: cartTotal })
+      });
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        setAppliedDiscount({ amount: data.discountAmount, code: promoCodeInput.toUpperCase() });
+        setPromoMessage({ text: `🎉 ₹${data.discountAmount} discount applied!`, type: 'success' });
+      } else {
+        setAppliedDiscount(null);
+        setPromoMessage({ text: data.error || 'Invalid or expired code.', type: 'error' });
+      }
+    } catch (err) {
+      setPromoMessage({ text: 'Failed to verify code. Try again.', type: 'error' });
+    }
+  };
 
   const handlePayment = async () => {
     setIsProcessing(true);
@@ -94,7 +124,7 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 vendorId,
-                tableId: 'Table-4',
+                tableId: tableId,
                 items: cart,
                 total: grandTotal,
                 paymentMode: 'UPI', 
@@ -180,6 +210,42 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
           </div>
         </div>
 
+        {/* --- PROMO CODE BOX --- */}
+        <div className="bg-[#1A1A1A] rounded-2xl border border-gray-800 p-4">
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Promo Code</h2>
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              placeholder="Enter code" 
+              value={promoCodeInput}
+              onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+              disabled={!!appliedDiscount}
+              className="flex-1 bg-[#121212] border border-gray-800 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#E55B3C] disabled:opacity-50"
+            />
+            {!appliedDiscount ? (
+              <button 
+                onClick={handleApplyPromo}
+                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all"
+              >
+                Apply
+              </button>
+            ) : (
+              <button 
+                onClick={() => { setAppliedDiscount(null); setPromoCodeInput(''); setPromoMessage({text:'', type:''}); }}
+                className="bg-red-500/10 text-red-400 hover:bg-red-500/20 px-4 py-2 rounded-lg text-sm font-bold transition-all"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          
+          {promoMessage.text && (
+            <p className={`text-xs mt-2 font-medium ${promoMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+              {promoMessage.text}
+            </p>
+          )}
+        </div>
+
         {/* Bill Details */}
         <div className="bg-[#1A1A1A] rounded-2xl border border-gray-800 p-4">
           <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Bill Details</h2>
@@ -189,6 +255,15 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
               <span>Item Total</span>
               <span className="text-gray-200">₹{cartTotal}</span>
             </div>
+            
+            {/* NEW: Show the discount in the bill! */}
+            {appliedDiscount && (
+              <div className="flex justify-between text-green-400">
+                <span>Promo Discount ({appliedDiscount.code})</span>
+                <span>-₹{appliedDiscount.amount}</span>
+              </div>
+            )}
+            
             <div className="flex justify-between">
               <span>Platform Fee</span>
               <span className="text-gray-200">₹{platformFee}</span>
@@ -233,7 +308,7 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
 
       </div>
 
-      {/* FLOATING ACTION BUTTON (Always Visible, changes text based on selection) */}
+      {/* FLOATING ACTION BUTTON */}
       <div className="fixed bottom-0 left-0 right-0 bg-[#121212] border-t border-gray-800 p-4 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.8)] z-50">
         <button 
           onClick={handlePayment}

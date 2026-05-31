@@ -21,34 +21,39 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
 
   useEffect(() => {
     const fetchMenuAndPromos = async () => {
-      try {
-        // 1. Fetch the Food Menu (Restored!)
-        const menuRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/menu`);
-        if (menuRes.ok) {
-          const menuData = await menuRes.json();
-
-          // 👇 ADD THIS SPY LINE 👇
-          console.log("THE SERVER SENT THIS:", menuData);
-
-          // Depending on your backend, it might be in { menu: [...] } or just an array
-          setMenu(menuData.menu || []);
-        }
-
-        // 2. Fetch Active Promos
-        const promoRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos`);
-        if (promoRes.ok) {
-          const promoData = await promoRes.json();
-          const active = promoData.promos?.find((p: any) => p.isActive);
-          if (active) {
-            const discountText = active.type === 'FLAT' ? `₹${active.value} OFF` : `${active.value}% OFF`;
-            setActivePromoBanner(`🎉 Use code ${active.code} for ${discountText} on orders over ₹${active.minOrderValue}!`);
+        try {
+          // 1. Fetch the Food Menu
+          const menuRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/menu`);
+          if (menuRes.ok) {
+            const menuData = await menuRes.json();
+            
+            console.log("SERVER DATA:", menuData); // Spying on the data
+            
+            // 👇 THE CRITICAL LINE 👇
+            // We must explicitly use .items because your server sends { items: [...] }
+            if (menuData.items && Array.isArray(menuData.items)) {
+               setMenu(menuData.items);
+               console.log("Successfully saved 5 items to React!");
+            } else {
+               setMenu([]);
+            }
           }
+  
+          // 2. Fetch Active Promos
+          const promoRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos`);
+          if (promoRes.ok) {
+            const promoData = await promoRes.json();
+            const active = promoData.promos?.find((p: any) => p.isActive);
+            if (active) {
+              const discountText = active.type === 'FLAT' ? `₹${active.value} OFF` : `${active.value}% OFF`;
+              setActivePromoBanner(`🎉 Use code ${active.code} for ${discountText} on orders over ₹${active.minOrderValue}!`);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to load data", err);
+        } finally {
+          setLoading(false);
         }
-      } catch (err) {
-        console.error("Failed to load data", err);
-      } finally {
-        setLoading(false);
-      }
     };
 
     fetchMenuAndPromos();

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { SignInButton, SignUpButton, Show, UserButton } from '@clerk/react';
 import { Toaster } from 'react-hot-toast';
 import { CartProvider } from './context/CartContext';
 import CustomerMenu from './components/CustomerMenu';
@@ -74,6 +75,31 @@ function App() {
     <CartProvider>
       <Toaster position="top-center" toastOptions={{ duration: 3000 }} />
       <div className="min-h-screen bg-[#0a0a0a] pb-10 relative">
+        <div className="sticky top-0 z-50 border-b border-white/10 bg-[#0a0a0a]/90 px-4 py-3 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3">
+            <div className="text-left">
+              <p className="text-sm font-semibold text-white">Pabee</p>
+              <p className="text-xs text-gray-400">Street food ordering</p>
+            </div>
+            <div className="flex min-h-9 items-center gap-2">
+              <Show when="signed-out">
+                <SignInButton mode="modal">
+                  <button className="rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10">
+                    Sign in
+                  </button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <button className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-bold text-black transition-colors hover:bg-emerald-400">
+                    Sign up
+                  </button>
+                </SignUpButton>
+              </Show>
+              <Show when="signed-in">
+                <UserButton />
+              </Show>
+            </div>
+          </div>
+        </div>
         
         {/* 🔥 DEV TOOLS ARE COMPLETELY DELETED 🔥 
           No one can click a button to see the dashboard anymore.

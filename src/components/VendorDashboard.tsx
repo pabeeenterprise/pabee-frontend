@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/clerk-react'; // 👈 NEW IMPORT
 import Sidebar from './Sidebar';
 import LiveOrders from './LiveOrders';
 import Overview from './Overview';
@@ -8,30 +9,54 @@ import OffersPromos from './OffersPromos';
 import MyQRCode from './MyQRCode';
 import Settings from './Settings';
 
-export default function VendorDashboard({ vendorId }: { vendorId: string }) {
-  // The master state that remembers which tab we are looking at
+export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorId: string }) {
+  const { userId, isLoaded } = useAuth(); // Grab the real Google ID!
   const [activeTab, setActiveTab] = useState('live-orders');
+  const [realVendorId, setRealVendorId] = useState<string | null>(null);
+
+  // Link Clerk Auth to your Prisma Database
+  useEffect(() => {
+    if (userId) {
+      // Ask the backend: "What is the Prisma database ID for this Google user?"
+      fetch(`https://pabee-backend.onrender.com/api/vendors/${userId}/profile`)
+        .then(res => {
+          if (!res.ok) throw new Error("Profile not found");
+          return res.json();
+        })
+        .then(data => {
+          setRealVendorId(data.id); // Success! Use your unique database ID
+        })
+        .catch(err => {
+          console.error("Database sync error:", err);
+          setRealVendorId(defaultVendorId); // Fallback to dummy data
+        });
+    }
+  }, [userId, defaultVendorId]);
+
+  if (!isLoaded || !realVendorId || !userId) {
+    return (
+      <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center text-[#E5B35C] font-serif text-xl">
+        Loading secure dashboard...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-gray-200 font-sans flex overflow-hidden">
-      
-      {/* 1. We just drop the Sidebar component here! */}
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-
-      {/* 2. Main Content Area */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        
-        {/* Dynamic Tab Content (This swaps out based on what you click) */}
         <main className="flex-1 overflow-y-auto w-full">
-          {activeTab === 'live-orders' && <LiveOrders vendorId={vendorId} />}
-          {activeTab === 'overview' && <Overview vendorId={vendorId} />}
-          {activeTab === 'menu-editor' && <MenuEditor vendorId={vendorId} />}
-          {activeTab === 'offers' && <OffersPromos vendorId={vendorId} />}
-          {activeTab === 'analytics' && <Analytics vendorId={vendorId} />}
-          {activeTab === 'qr-code' && <MyQRCode vendorId={vendorId} />}
-          {activeTab === 'settings' && <Settings vendorId={vendorId} />}
+          {/* Your tools use the Prisma Database ID */}
+          {activeTab === 'live-orders' && <LiveOrders vendorId={realVendorId} />}
+          {activeTab === 'overview' && <Overview vendorId={realVendorId} />}
+          {activeTab === 'menu-editor' && <MenuEditor vendorId={realVendorId} />}
+          {activeTab === 'offers' && <OffersPromos vendorId={realVendorId} />}
+          {activeTab === 'analytics' && <Analytics vendorId={realVendorId} />}
+          {activeTab === 'qr-code' && <MyQRCode vendorId={realVendorId} />}
+          
+          {/* Settings uses the Google Clerk ID to manage your profile! */}
+          {activeTab === 'settings' && <Settings vendorId={userId} />}
         </main>
-
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ export default function Settings({ vendorId }: { vendorId: string }) {
     const fetchProfile = async () => {
       try {
         // Change localhost to your Render URL if testing live!
-        const response = await fetch(`http://localhost:3000/api/vendors/${vendorId}/profile`);
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/profile`);
         if (response.ok) {
           const data = await response.json();
           setName(data.name || '');
@@ -39,7 +39,7 @@ export default function Settings({ vendorId }: { vendorId: string }) {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`http://localhost:3000/api/vendors/${vendorId}/profile`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, businessType }),

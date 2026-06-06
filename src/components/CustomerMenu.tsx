@@ -70,10 +70,24 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
     fetchData();
   }, [vendorId]);
 
-  if (loading || !vendorProfile) {
+  // 1. Show this ONLY while fetching data
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#121212] flex items-center justify-center">
         <p className="font-medium text-gray-400 animate-pulse">Loading menu...</p>
+      </div>
+    );
+  }
+
+  // 2. Show this if the data finished loading, but no vendor was found!
+  if (!vendorProfile) {
+    return (
+      <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center text-center px-6">
+        <span className="text-5xl mb-4">🍽️</span>
+        <h2 className="text-2xl font-bold text-white mb-2">Menu Not Found</h2>
+        <p className="text-gray-400">
+          We couldn't find this restaurant. Please make sure you scanned a valid QR code!
+        </p>
       </div>
     );
   }

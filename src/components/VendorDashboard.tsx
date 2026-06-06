@@ -59,7 +59,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           {activeTab === 'settings' && <Settings vendorId={userId} />}
 
           {/* Branding Studio */}
-          {activeTab === 'branding' && <BrandingStudio vendorId={realVendorId} />}
+          {activeTab === 'branding' && <BrandingStudio vendorId={userId} />}
         </main>
       </div>
     </div>

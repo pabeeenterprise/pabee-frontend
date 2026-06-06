@@ -32,15 +32,25 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   useEffect(() => {
     const fetchData = async () => {
         try {
-          // 1. Fetch Vendor Profile (Branding)
-          const profileRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/profile`);
-          if (profileRes.ok) {
-            const profileData = await profileRes.json();
-            setVendorProfile(profileData);
-          }
+          // 🛡️ TRAP 1 FIX: A bulletproof fallback so Vercel never crashes
+          const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend.onrender.com';
 
-          // 2. Fetch the Food Menu
-          const menuRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/menu`);
+          // 1. Fetch Vendor Profile (Using the Clerk ID from the QR Code)
+          const profileRes = await fetch(`${API_URL}/api/vendors/${vendorId}/profile`);
+          
+          if (!profileRes.ok) {
+            setLoading(false);
+            return; // Exit early if vendor doesn't exist
+          }
+          
+          const profileData = await profileRes.json();
+          setVendorProfile(profileData);
+
+          // 🛡️ TRAP 2 FIX: Grab the REAL Database ID to fetch the food!
+          const realDbId = profileData.id;
+
+          // 2. Fetch the Food Menu (Using the Database ID)
+          const menuRes = await fetch(`${API_URL}/api/vendors/${realDbId}/menu`);
           if (menuRes.ok) {
             const menuData = await menuRes.json();
             if (menuData.items && Array.isArray(menuData.items)) {
@@ -50,8 +60,8 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
             }
           }
   
-          // 3. Fetch Active Promos
-          const promoRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos`);
+          // 3. Fetch Active Promos (Using the Database ID)
+          const promoRes = await fetch(`${API_URL}/api/vendors/${realDbId}/promos`);
           if (promoRes.ok) {
             const promoData = await promoRes.json();
             const active = promoData.promos?.find((p: any) => p.isActive);

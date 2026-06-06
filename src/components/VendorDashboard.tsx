@@ -8,6 +8,7 @@ import Analytics from './Analytics';
 import OffersPromos from './OffersPromos';
 import MyQRCode from './MyQRCode';
 import Settings from './Settings';
+import BrandingStudio from './BrandingStudio';
 
 export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorId: string }) {
   const { userId, isLoaded } = useAuth(); // Grab the real Google ID!
@@ -56,6 +57,9 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           
           {/* Settings uses the Google Clerk ID to manage your profile! */}
           {activeTab === 'settings' && <Settings vendorId={userId} />}
+
+          {/* Branding Studio */}
+          {activeTab === 'branding-studio' && <BrandingStudio vendorId={realVendorId} />}
         </main>
       </div>
     </div>

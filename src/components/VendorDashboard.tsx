@@ -53,7 +53,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           {activeTab === 'menu-editor' && <MenuEditor vendorId={realVendorId} />}
           {activeTab === 'offers' && <OffersPromos vendorId={realVendorId} />}
           {activeTab === 'analytics' && <Analytics vendorId={realVendorId} />}
-          {activeTab === 'qr-code' && <MyQRCode vendorId={realVendorId} />}
+          {activeTab === 'qr-code' && <MyQRCode vendorId={userId} />}
           
           {/* Settings uses the Google Clerk ID to manage your profile! */}
           {activeTab === 'settings' && <Settings vendorId={userId} />}

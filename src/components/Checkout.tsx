@@ -1,331 +1,287 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { useCart } from '../context/CartContext';
 
-// 1. Load Razorpay Script (Safely outside the component)
-const loadRazorpayScript = () => {
-  return new Promise((resolve) => {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-};
+export default function Checkout({ vendorId, onBack }: { vendorId: string, onBack: () => void }) {
+  const { cart, clearCart } = useCart();
+  
+  // Basic Info
+  const [tableId, setTableId] = useState('');
+  const [phone, setPhone] = useState('');
+  const [paymentMode, setPaymentMode] = useState('UPI');
+  
+  // Promo State
+  const [promoCode, setPromoCode] = useState('');
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [isPromoApplied, setIsPromoApplied] = useState(false);
+  
+  // OTP & Submission State
+  const [otpStep, setOtpStep] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [orderComplete, setOrderComplete] = useState(false);
 
-export default function Checkout({ vendorId, tableId, onBack }: { vendorId: string, tableId: string, onBack: () => void }) {
-  const { cart, cartTotal, clearCart } = useCart();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'ONLINE' | 'CASH'>('ONLINE');
+  const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend.onrender.com';
+  
+  // 🛡️ THE FIX: Removed .item from the calculations
+  const subtotal = cart.reduce((sum, cartItem) => sum + (cartItem.price * cartItem.qty), 0);
+  const finalTotal = Math.max(0, subtotal - discountAmount);
 
-  // --- NEW PROMO STATES ---
-  const [promoCodeInput, setPromoCodeInput] = useState('');
-  const [appliedDiscount, setAppliedDiscount] = useState<{ amount: number, code: string } | null>(null);
-  const [promoMessage, setPromoMessage] = useState({ text: '', type: '' });
-
-  // --- UPDATED MATH ---
-  const gst = Math.round(cartTotal * 0.05); // 5% GST on food
-  const platformFee = 5;
-  const discountAmount = appliedDiscount ? appliedDiscount.amount : 0;
-  // Subtract discount from the total!
-  const grandTotal = cartTotal - discountAmount + gst + platformFee; 
-
-  // --- VERIFY PROMO FUNCTION ---
+  // 1. Apply Promo Code
   const handleApplyPromo = async () => {
-    if (!promoCodeInput.trim()) return;
+    if (!promoCode) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos/verify`, {
+      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/promos/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: promoCodeInput, cartTotal: cartTotal })
+        body: JSON.stringify({ code: promoCode, cartTotal: subtotal })
       });
+      
       const data = await res.json();
       
       if (res.ok && data.success) {
-        setAppliedDiscount({ amount: data.discountAmount, code: promoCodeInput.toUpperCase() });
-        setPromoMessage({ text: `🎉 ₹${data.discountAmount} discount applied!`, type: 'success' });
+        setDiscountAmount(data.discountAmount);
+        setIsPromoApplied(true);
+        toast.success(`Promo applied! You saved ₹${data.discountAmount}`);
       } else {
-        setAppliedDiscount(null);
-        setPromoMessage({ text: data.error || 'Invalid or expired code.', type: 'error' });
+        toast.error(data.error || "Invalid promo code");
+        setDiscountAmount(0);
+        setIsPromoApplied(false);
       }
     } catch (err) {
-      setPromoMessage({ text: 'Failed to verify code. Try again.', type: 'error' });
+      toast.error("Failed to verify promo");
     }
   };
 
-  const handlePayment = async () => {
-    setIsProcessing(true);
-
-    // ==========================================
-    // FLOW 1: CASH PAYMENT (Direct to Database)
-    // ==========================================
-    if (paymentMethod === 'CASH') {
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/orders`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            vendorId,
-            tableId: tableId,
-            items: cart,
-            total: grandTotal,
-            paymentMode: 'CASH',
-            customerPhone: '9876543210'
-          })
-        });
-
-        if (res.ok) {
-          clearCart();
-          alert("🎉 Order placed! Please pay cash at the counter.");
-          onBack();
-        } else {
-          alert("Failed to place order. Please try again.");
-        }
-      } catch (err) {
-        console.error(err);
-        alert("Network error.");
-      } finally {
-        setIsProcessing(false);
-      }
-      return; // Stop here for cash
-    }
-
-    // ==========================================
-    // FLOW 2: RAZORPAY ONLINE PAYMENT
-    // ==========================================
-    const res = await loadRazorpayScript();
-    if (!res) {
-      alert('Razorpay SDK failed to load. Are you online?');
-      setIsProcessing(false);
+  // 2. Request OTP
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tableId || phone.length < 10) {
+      toast.error("Please enter a valid Table Number and Phone Number");
       return;
     }
 
+    setIsSubmitting(true);
     try {
-      // Ask backend to create a Razorpay Order ID
-      const orderResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/razorpay/create-order`, {
+      const res = await fetch(`${API_URL}/api/otp/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: grandTotal })
+        body: JSON.stringify({ phone })
       });
-      const orderData = await orderResponse.json();
-
-      // Open Razorpay Popup
-      const options = {
-        key: 'rzp_test_1234567890abcd', // 👈 REMEMBER TO PUT YOUR TEST KEY HERE!
-        amount: orderData.amount,
-        currency: orderData.currency,
-        name: "Pabee Street Food",
-        description: "Order Payment",
-        order_id: orderData.id,
-        handler: async function (response: any) {
-          // THIS RUNS ONLY IF PAYMENT IS SUCCESSFUL
-          try {
-            const dbRes = await fetch(`${import.meta.env.VITE_API_URL}/api/orders`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                vendorId,
-                tableId: tableId,
-                items: cart,
-                total: grandTotal,
-                paymentMode: 'UPI', 
-                customerPhone: '9876543210'
-              })
-            });
-
-            if (dbRes.ok) {
-              clearCart();
-              alert(`🎉 Payment Successful! (ID: ${response.razorpay_payment_id})`);
-              onBack();
-            }
-          } catch (err) {
-            console.error("Database save failed:", err);
-            alert("Payment worked, but order failed to send to kitchen.");
-          }
-        },
-        prefill: {
-          name: "Test Customer",
-          contact: "9876543210",
-        },
-        theme: {
-          color: "#E55B3C" // Matches your Pabee Orange!
-        }
-      };
-
-      const paymentObject = new (window as any).Razorpay(options);
-      paymentObject.open();
-
+      
+      if (res.ok) {
+        setOtpStep(true);
+        toast.success("OTP Sent! (Use 1234 for testing)");
+      } else {
+        toast.error("Failed to send OTP");
+      }
     } catch (err) {
-      console.error(err);
-      alert("Something went wrong with the payment gateway.");
+      toast.error("Network error");
     } finally {
-      setIsProcessing(false);
+      setIsSubmitting(false);
     }
   };
 
-  if (cart.length === 0) {
+  // 3. Verify OTP & Place Order
+  const handlePlaceOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      // Step A: Verify OTP
+      const otpRes = await fetch(`${API_URL}/api/otp/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp })
+      });
+
+      if (!otpRes.ok) {
+        toast.error("Invalid OTP code. Try 1234.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Step B: Submit the Order to the Kitchen
+      // 🛡️ THE FIX: Removed .item from the payload mapping
+      const orderPayload = {
+        vendorId,
+        tableId,
+        customerPhone: phone,
+        paymentMode,
+        total: finalTotal,
+        items: cart.map(c => ({
+          name: c.name,
+          qty: c.qty,
+          price: c.price
+        }))
+      };
+
+      const orderRes = await fetch(`${API_URL}/api/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderPayload)
+      });
+
+      if (orderRes.ok) {
+        setOrderComplete(true);
+        clearCart();
+      } else {
+        throw new Error("Failed to create order");
+      }
+    } catch (err) {
+      toast.error("Error placing order. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --- SUCCESS SCREEN ---
+  if (orderComplete) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-gray-100 flex flex-col items-center justify-center p-4">
-        <div className="text-6xl mb-4">🛒</div>
-        <h2 className="text-xl font-bold mb-2">Your cart is empty</h2>
-        <p className="text-gray-500 mb-6">Looks like you haven't added anything yet.</p>
-        <button onClick={onBack} className="bg-[#E55B3C] text-white px-6 py-2 rounded-lg font-bold">
-          Go back to Menu
+      <div className="min-h-screen bg-[#0B0E14] flex flex-col items-center justify-center p-6 text-center font-sans">
+        <div className="w-24 h-24 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center text-4xl mb-6">
+          ✓
+        </div>
+        <h2 className="text-3xl font-bold text-white mb-2">Order Sent!</h2>
+        <p className="text-gray-400 mb-8">
+          The kitchen has received your order. Preparing it fresh!
+        </p>
+        <button 
+          onClick={onBack}
+          className="bg-[#E5B35C] text-[#0B0E14] font-bold py-3 px-8 rounded-xl shadow-lg"
+        >
+          Return to Menu
         </button>
       </div>
     );
   }
 
+  // --- CHECKOUT SCREEN ---
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-gray-100 pb-28 font-sans">
-      
+    <div className="min-h-screen bg-[#0B0E14] text-gray-200 font-sans pb-24">
       {/* Header */}
-      <div className="sticky top-0 bg-[#121212]/95 backdrop-blur-md border-b border-gray-800 z-10 px-4 py-4 flex items-center gap-4 shadow-lg">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center bg-gray-800 rounded-full hover:bg-gray-700 transition-colors">
-          ←
-        </button>
-        <h1 className="text-lg font-bold">Checkout</h1>
+      <div className="sticky top-0 bg-[#13161F] border-b border-[#1F2330] p-4 flex items-center gap-4 z-10">
+        <button onClick={onBack} className="text-[#E5B35C] font-bold text-xl">←</button>
+        <h1 className="text-xl font-bold">Checkout</h1>
       </div>
 
-      <div className="p-4 max-w-lg mx-auto flex flex-col gap-6">
-        
+      <div className="p-4 max-w-lg mx-auto">
         {/* Order Summary */}
-        <div className="bg-[#1A1A1A] rounded-2xl border border-gray-800 p-4">
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Order Summary</h2>
-          
-          <div className="flex flex-col gap-4">
-            {cart.map(item => (
-              <div key={item.id} className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-sm border ${item.veg ? 'border-green-500 bg-green-500/20' : 'border-red-500 bg-red-500/20'} flex items-center justify-center`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${item.veg ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                  </div>
-                  <div>
-                    <p className="font-bold text-sm text-gray-200">{item.name}</p>
-                    <p className="text-xs text-gray-500">₹{item.price} x {item.qty}</p>
-                  </div>
+        <div className="bg-[#13161F] border border-[#1F2330] rounded-2xl p-5 mb-6 shadow-md">
+          <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Order Summary</h2>
+          <div className="space-y-3 mb-4">
+            {cart.map((cartItem, idx) => (
+              <div key={idx} className="flex justify-between items-center text-sm">
+                <div>
+                  {/* 🛡️ THE FIX: Removed .item from the summary UI */}
+                  <span className="font-bold text-white">{cartItem.qty}x</span> {cartItem.name}
                 </div>
-                <div className="font-bold text-gray-300">₹{item.price * item.qty}</div>
+                <div className="text-gray-400">₹{cartItem.price * cartItem.qty}</div>
               </div>
             ))}
           </div>
-        </div>
-
-        {/* --- PROMO CODE BOX --- */}
-        <div className="bg-[#1A1A1A] rounded-2xl border border-gray-800 p-4">
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Promo Code</h2>
-          <div className="flex gap-2">
-            <input 
-              type="text" 
-              placeholder="Enter code" 
-              value={promoCodeInput}
-              onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
-              disabled={!!appliedDiscount}
-              className="flex-1 bg-[#121212] border border-gray-800 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#E55B3C] disabled:opacity-50"
-            />
-            {!appliedDiscount ? (
-              <button 
-                onClick={handleApplyPromo}
-                className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all"
-              >
-                Apply
-              </button>
-            ) : (
-              <button 
-                onClick={() => { setAppliedDiscount(null); setPromoCodeInput(''); setPromoMessage({text:'', type:''}); }}
-                className="bg-red-500/10 text-red-400 hover:bg-red-500/20 px-4 py-2 rounded-lg text-sm font-bold transition-all"
-              >
-                Remove
-              </button>
-            )}
-          </div>
           
-          {promoMessage.text && (
-            <p className={`text-xs mt-2 font-medium ${promoMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
-              {promoMessage.text}
-            </p>
-          )}
-        </div>
-
-        {/* Bill Details */}
-        <div className="bg-[#1A1A1A] rounded-2xl border border-gray-800 p-4">
-          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Bill Details</h2>
-          
-          <div className="flex flex-col gap-2 text-sm text-gray-400">
-            <div className="flex justify-between">
-              <span>Item Total</span>
-              <span className="text-gray-200">₹{cartTotal}</span>
+          <div className="border-t border-[#1F2330] pt-4 space-y-2 text-sm">
+            <div className="flex justify-between text-gray-400">
+              <span>Subtotal</span>
+              <span>₹{subtotal}</span>
             </div>
-            
-            {/* NEW: Show the discount in the bill! */}
-            {appliedDiscount && (
-              <div className="flex justify-between text-green-400">
-                <span>Promo Discount ({appliedDiscount.code})</span>
-                <span>-₹{appliedDiscount.amount}</span>
+            {isPromoApplied && (
+              <div className="flex justify-between text-green-400 font-bold">
+                <span>Discount</span>
+                <span>- ₹{discountAmount}</span>
               </div>
             )}
-            
-            <div className="flex justify-between">
-              <span>Platform Fee</span>
-              <span className="text-gray-200">₹{platformFee}</span>
-            </div>
-            <div className="flex justify-between border-b border-gray-800 pb-3">
-              <span>GST (5%)</span>
-              <span className="text-gray-200">₹{gst}</span>
-            </div>
-            <div className="flex justify-between pt-1 font-bold text-lg text-white">
-              <span>To Pay</span>
-              <span className="text-[#E55B3C]">₹{grandTotal}</span>
+            <div className="flex justify-between text-white text-lg font-bold pt-2 border-t border-[#1F2330] mt-2">
+              <span>Total</span>
+              <span className="text-[#E5B35C]">₹{finalTotal}</span>
             </div>
           </div>
         </div>
 
-        {/* Payment Method */}
-        <div className="bg-[#1A1A1A] rounded-2xl border border-gray-800 p-4 flex flex-col gap-3">
-           <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Pay Via</h2>
-           
-           <button 
-             onClick={() => setPaymentMethod('ONLINE')}
-             className={`flex items-center justify-between p-3 rounded-xl border ${paymentMethod === 'ONLINE' ? 'border-[#E55B3C] bg-[#E55B3C]/10' : 'border-gray-800 bg-[#121212]'}`}
-           >
-             <div className="flex items-center gap-3">
-               <span className="text-xl">💳</span>
-               <span className="font-bold text-sm">UPI, Cards & Netbanking</span>
-             </div>
-             <div className={`w-4 h-4 rounded-full border-2 ${paymentMethod === 'ONLINE' ? 'border-[#E55B3C] bg-[#E55B3C]' : 'border-gray-600'}`}></div>
-           </button>
+        {/* Promo Code Input */}
+        {!isPromoApplied && (
+          <div className="flex gap-2 mb-6">
+            <input 
+              type="text" 
+              placeholder="Have a promo code?" 
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+              className="flex-1 bg-[#13161F] border border-[#1F2330] rounded-xl p-3 text-white text-sm focus:border-[#E5B35C] outline-none uppercase"
+            />
+            <button 
+              onClick={handleApplyPromo}
+              className="bg-[#1F2330] text-white px-4 rounded-xl font-bold text-sm hover:bg-gray-700 transition-colors"
+            >
+              Apply
+            </button>
+          </div>
+        )}
 
-           <button 
-             onClick={() => setPaymentMethod('CASH')}
-             className={`flex items-center justify-between p-3 rounded-xl border ${paymentMethod === 'CASH' ? 'border-[#E55B3C] bg-[#E55B3C]/10' : 'border-gray-800 bg-[#121212]'}`}
-           >
-             <div className="flex items-center gap-3">
-               <span className="text-xl">💵</span>
-               <span className="font-bold text-sm">Cash at Counter</span>
-             </div>
-             <div className={`w-4 h-4 rounded-full border-2 ${paymentMethod === 'CASH' ? 'border-[#E55B3C] bg-[#E55B3C]' : 'border-gray-600'}`}></div>
-           </button>
-        </div>
+        {/* User Details & OTP Form */}
+        <div className="bg-[#13161F] border border-[#1F2330] rounded-2xl p-5 shadow-md">
+          <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Your Details</h2>
+          
+          {!otpStep ? (
+            <form onSubmit={handleSendOtp} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">Table Number</label>
+                <input 
+                  type="text" required placeholder="e.g. Table 4" value={tableId} onChange={(e) => setTableId(e.target.value)}
+                  className="w-full bg-[#0B0E14] border border-gray-800 rounded-xl p-3 text-white outline-none focus:border-[#E5B35C]"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">Phone Number</label>
+                <input 
+                  type="tel" required placeholder="10-digit mobile number" value={phone} onChange={(e) => setPhone(e.target.value)}
+                  className="w-full bg-[#0B0E14] border border-gray-800 rounded-xl p-3 text-white outline-none focus:border-[#E5B35C]"
+                />
+              </div>
 
-      </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">Payment Method</label>
+                <select 
+                  value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)}
+                  className="w-full bg-[#0B0E14] border border-gray-800 rounded-xl p-3 text-white outline-none focus:border-[#E5B35C]"
+                >
+                  <option value="UPI">Pay via UPI / QR</option>
+                  <option value="CASH">Pay Cash at Counter</option>
+                </select>
+              </div>
 
-      {/* FLOATING ACTION BUTTON */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#121212] border-t border-gray-800 p-4 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.8)] z-50">
-        <button 
-          onClick={handlePayment}
-          disabled={isProcessing}
-          className="w-full bg-[#E55B3C] disabled:bg-gray-700 text-white font-bold py-4 rounded-xl flex justify-center items-center gap-2 transition-all active:scale-95"
-        >
-          {isProcessing ? (
-            <span className="animate-pulse">Processing...</span>
+              <button 
+                type="submit" disabled={isSubmitting}
+                className="w-full mt-4 bg-[#E5B35C] text-[#0B0E14] font-bold py-3.5 rounded-xl transition-opacity disabled:opacity-50"
+              >
+                {isSubmitting ? 'Processing...' : 'Verify Phone & Order'}
+              </button>
+            </form>
           ) : (
-            <>
-              <span>{paymentMethod === 'ONLINE' ? `Pay ₹${grandTotal} Securely` : `Place Cash Order (₹${grandTotal})`}</span>
-              <span>→</span>
-            </>
-          )}
-        </button>
-      </div>
+            <form onSubmit={handlePlaceOrder} className="space-y-4">
+              <div className="p-3 bg-green-500/10 border border-green-500/20 text-green-400 text-sm rounded-xl mb-4">
+                OTP sent to {phone}. Use <strong>1234</strong> for testing.
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">Enter 4-Digit OTP</label>
+                <input 
+                  type="text" required placeholder="1234" maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value)}
+                  className="w-full bg-[#0B0E14] border border-gray-800 rounded-xl p-3 text-white outline-none focus:border-[#E5B35C] text-center text-xl tracking-widest"
+                />
+              </div>
 
+              <button 
+                type="submit" disabled={isSubmitting}
+                className="w-full mt-4 bg-[#E5B35C] text-[#0B0E14] font-bold py-3.5 rounded-xl transition-opacity disabled:opacity-50"
+              >
+                {isSubmitting ? 'Sending to Kitchen...' : `Confirm Order (₹${finalTotal})`}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

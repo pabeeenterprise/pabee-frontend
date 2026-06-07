@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { useUser } from '@clerk/clerk-react';
 
 export default function Settings({ vendorId }: { vendorId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  
+  const { user } = useUser();
+  const accountEmail = user?.primaryEmailAddress?.emailAddress || '';
   // Form State
   const [name, setName] = useState('');
   const [businessType, setBusinessType] = useState('Street Stall');
-  const [email, setEmail] = useState('');
 
   // 1. Fetch their existing data when the page loads
   useEffect(() => {
@@ -20,7 +21,6 @@ export default function Settings({ vendorId }: { vendorId: string }) {
           const data = await response.json();
           setName(data.name || '');
           setBusinessType(data.businessType || 'Street Stall');
-          setEmail(data.email || '');
         }
       } catch (error) {
         console.error("Failed to load profile", error);
@@ -76,8 +76,8 @@ export default function Settings({ vendorId }: { vendorId: string }) {
             Account Email (Managed via Google)
           </label>
           <input 
-            type="email" 
-            value={email}
+            type="text" 
+            value={accountEmail}
             disabled
             className="w-full bg-[#0B0E14] border border-gray-800 text-gray-500 rounded-lg p-3 text-sm cursor-not-allowed"
           />

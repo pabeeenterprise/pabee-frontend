@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useAuth } from '@clerk/clerk-react'; // 👈 1. ADD THIS LINE
 
 interface OrderItem {
   id?: string;
@@ -19,12 +20,15 @@ interface Order {
 export default function Overview({ vendorId }: { vendorId: string }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { getToken } = useAuth(); // 👈 2. ADD THIS LINE
 
   // 1. Fetch Data
   useEffect(() => {
     const fetchOrders = async () => {
       try {
+        const token = await getToken(); // 👈 3A. GET TOKEN
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/sales`, {
+          headers: { 'Authorization': `Bearer ${token}` }, // 👈 3B. SEND TOKEN
             cache: 'no-store' // 👈 This forces the browser to fetch fresh data every time!
           });
           if (res.ok) {

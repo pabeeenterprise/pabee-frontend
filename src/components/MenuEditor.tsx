@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { supabase } from '../lib/supabase'; // 👈 MAKE SURE THIS PATH MATCHES YOUR SETUP
 
 // Define the shape of your data based on your Prisma schema
 type MenuItem = {
@@ -10,6 +11,7 @@ type MenuItem = {
   prep: string;
   veg: boolean;
   available: boolean;
+  imageUrl?: string | null; // 👈 ADDED IMAGE URL TYPE
 };
 
 export default function MenuEditor({ vendorId }: { vendorId: string }) {
@@ -23,6 +25,10 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
   const [price, setPrice] = useState('');
   const [prep, setPrep] = useState('10 min');
   const [veg, setVeg] = useState(true);
+  
+  // Image Upload State
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL;
 
@@ -45,38 +51,90 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
     if (vendorId) fetchMenu();
   }, [vendorId]);
 
-  // 2. Add New Item
+  // 👇 NEW: Safe File Selection Handler (2MB Limit)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image must be smaller than 2MB");
+      e.target.value = ''; // Reset the input
+      return;
+    }
+    
+    setImageFile(file);
+  };
+
+  // 2. Add New Item (UPGRADED WITH UPLOAD LOGIC)
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+    let finalImageUrl = null;
     
     try {
+      // Step A: Upload Image to Supabase FIRST
+      if (imageFile) {
+        setIsUploadingImage(true);
+        
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${vendorId}-${Date.now()}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('menu-items')
+          .upload(fileName, imageFile);
+
+        if (uploadError) {
+          console.error("Supabase Upload Error:", uploadError);
+          throw new Error("Failed to upload image to bucket");
+        }
+
+        const { data } = supabase.storage
+          .from('menu-items')
+          .getPublicUrl(fileName);
+          
+        finalImageUrl = data.publicUrl;
+        setIsUploadingImage(false);
+      }
+
+      // Step B: Send all data to Render backend
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          name, category, price: Number(price), prep, veg, available: true 
+          name, 
+          category, 
+          price: Number(price), 
+          prep, 
+          veg, 
+          available: true,
+          imageUrl: finalImageUrl // 👈 SENDING URL TO BACKEND
         }),
       });
 
       if (res.ok) {
         toast.success("Item added to menu!");
-        fetchMenu(); // Refresh the list
+        fetchMenu(); 
+        
         // Clear the form
         setName('');
         setPrice('');
         setPrep('10 min');
+        setImageFile(null);
+        // Reset file input element visually
+        const fileInput = document.getElementById('image-upload') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
       } else {
-        throw new Error("Failed to add");
+        throw new Error("Failed to save to database");
       }
-    } catch (error) {
-      toast.error("Error adding item");
+    } catch (error: any) {
+      toast.error(error.message || "Error adding item");
+      setIsUploadingImage(false);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // 3. Toggle Availability (In Stock / Out of Stock)
+  // 3. Toggle Availability
   const toggleAvailable = async (itemId: string, currentStatus: boolean) => {
     try {
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${itemId}`, {
@@ -87,7 +145,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
 
       if (res.ok) {
         toast.success(currentStatus ? "Marked Out of Stock" : "Marked In Stock");
-        // Update local state instantly so the UI feels snappy
         setItems(items.map(item => item.id === itemId ? { ...item, available: !currentStatus } : item));
       }
     } catch (error) {
@@ -125,8 +182,20 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
       {/* --- ADD ITEM FORM --- */}
       <form onSubmit={handleAddItem} className="bg-[#13161F] border border-[#1F2330] rounded-2xl p-6 shadow-xl mb-8">
         <h3 className="text-lg font-bold text-gray-200 mb-4">Add New Item</h3>
+        
+        {/* 👇 TOP ROW: Image Upload */}
+        <div className="mb-4">
+          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Item Photo (Optional, Max 2MB)</label>
+          <input 
+            id="image-upload"
+            type="file" 
+            accept="image/*"
+            onChange={handleFileChange}
+            className="w-full bg-[#0B0E14] border border-gray-700 text-gray-400 rounded-lg p-2 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#E5B35C] file:text-[#0B0E14] hover:file:bg-[#d4a24b] cursor-pointer" 
+          />
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
-          
           <div className="md:col-span-2">
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Item Name</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Tandoori Roti" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
@@ -162,8 +231,8 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
         </div>
 
         <div className="flex justify-end">
-          <button type="submit" disabled={isSaving} className="bg-[#E5B35C] text-[#0B0E14] font-bold py-2 px-6 rounded-lg text-sm hover:bg-[#d4a24b] transition-all disabled:opacity-50">
-            {isSaving ? 'Adding...' : '+ Add Item'}
+          <button type="submit" disabled={isSaving || isUploadingImage} className="bg-[#E5B35C] text-[#0B0E14] font-bold py-2 px-6 rounded-lg text-sm hover:bg-[#d4a24b] transition-all disabled:opacity-50">
+            {isUploadingImage ? 'Uploading Image...' : isSaving ? 'Saving...' : '+ Add Item'}
           </button>
         </div>
       </form>
@@ -173,6 +242,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[#0B0E14] border-b border-[#1F2330] text-xs font-bold text-gray-500 uppercase tracking-wider">
+              <th className="p-4 w-16">Image</th>
               <th className="p-4">Item</th>
               <th className="p-4">Category</th>
               <th className="p-4">Price</th>
@@ -182,10 +252,18 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
           </thead>
           <tbody className="divide-y divide-[#1F2330]">
             {items.length === 0 ? (
-              <tr><td colSpan={5} className="p-8 text-center text-gray-500">No items on the menu yet.</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No items on the menu yet.</td></tr>
             ) : (
               items.map((item) => (
                 <tr key={item.id} className="hover:bg-[#1a1f2b] transition-colors">
+                  <td className="p-4">
+                    {/* 👇 DISPLAY THUMBNAIL IF IT EXISTS */}
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} className="w-10 h-10 object-cover rounded-md border border-gray-700" />
+                    ) : (
+                      <div className="w-10 h-10 bg-gray-800 rounded-md flex items-center justify-center text-xs text-gray-500">No Img</div>
+                    )}
+                  </td>
                   <td className="p-4">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px]">{item.veg ? '🟢' : '🔴'}</span>

@@ -8,6 +8,7 @@ interface MenuItem {
   price: number;
   prep: string;
   veg: boolean;
+  imageUrl?: string | null; 
 }
 
 // 1. ADD: New interface for the Branding data
@@ -205,9 +206,17 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
               </div>
 
               <div className="flex flex-col items-end justify-between shrink-0">
-                 <div className={`w-20 h-20 rounded-xl flex items-center justify-center text-3xl mb-2 border ${borderColor} bg-gray-100 dark:bg-gray-800`}>
-                   {item.veg ? '🥗' : '🍗'}
-                 </div>
+              <div className={`w-20 h-20 rounded-xl flex items-center justify-center text-3xl mb-2 border ${borderColor} bg-gray-100 dark:bg-gray-800 overflow-hidden shrink-0`}>
+                 {item.imageUrl ? (
+                    <img 
+                      src={item.imageUrl} 
+                      alt={item.name} 
+                      className="w-full h-full object-cover shrink-0  "
+                    />
+                  ) : (
+                    <span className="text-3xl">{item.veg ? '🥗' : '🍗'}</span>
+                  )}
+              </div>
                  
                  {/* Dynamic Add Button */}
                  <button 

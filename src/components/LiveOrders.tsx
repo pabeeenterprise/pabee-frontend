@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/clerk-react'; // 👈 1. ADD THIS LINE
 
 interface OrderItem {
   id: string;
@@ -18,10 +19,13 @@ interface Order {
 export default function LiveOrders({ vendorId }: { vendorId: string }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const { getToken } = useAuth(); // 👈 2. ADD THIS LINE
 
   const fetchOrders = async () => {
     try {
+      const token = await getToken(); // 👈 3A. GET TOKEN
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/kitchen-queue`, {
+          headers: { 'Authorization': `Bearer ${token}` }, // 👈 3B. SEND TOKEN
             cache: 'no-store' // 👈 This forces the browser to fetch fresh data every time!
           });
       if (res.ok) {
@@ -43,9 +47,12 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
 
   const updateStatus = async (orderId: string, status: string) => {
     try {
+      const token = await getToken(); // 👈 3C. GET TOKEN
       await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${orderId}/kitchen-status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // 👈 3D. SEND TOKEN
+          },
         body: JSON.stringify({ status })
       });
       fetchOrders(); 

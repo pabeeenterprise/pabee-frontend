@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/clerk-react'; // 👈 IMPORTED HERE
 
 // We will use this mock data until we build the complex backend aggregation route!
 const MOCK_DATA = {
@@ -30,25 +31,31 @@ const MOCK_DATA = {
 
 export default function Analytics({ vendorId }: { vendorId: string }) {
   const [data, setData] = useState(MOCK_DATA);
-  const [isLoading, setIsLoading] = useState(false); // We will set this to true when we hook up the backend
+  const [isLoading, setIsLoading] = useState(false); 
+  
+  const { getToken } = useAuth(); // 👈 HOOK INITIALIZED HERE
 
   useEffect(() => {
     const fetchAnalytics = async () => {
-      setIsLoading(true); // Using the variable!
+      setIsLoading(true); 
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/analytics`);
+        const token = await getToken(); // 👈 GRAB TOKEN
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/analytics`, {
+          headers: { 'Authorization': `Bearer ${token}` } // 👈 ATTACH TOKEN
+        });
+        
         if (res.ok) {
           const realData = await res.json();
-          setData(realData); // Using the variable!
+          setData(realData); 
         }
       } catch (error) {
         console.error("Failed to load analytics", error);
       } finally {
-        setIsLoading(false); // Using the variable!
+        setIsLoading(false); 
       }
     };
 
-    fetchAnalytics();
+    if (vendorId) fetchAnalytics();
   }, [vendorId]);
 
   if (isLoading) {

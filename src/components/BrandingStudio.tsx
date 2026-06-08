@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { useAuth } from '@clerk/clerk-react'; // 👈 1. IMPORT CLERK AUTH
 
 export default function BrandingStudio({ vendorId }: { vendorId: string }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -12,12 +13,18 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
   const [bannerUrl, setBannerUrl] = useState('');
 
   const API_URL = import.meta.env.VITE_API_URL;
+  
+  // 👇 2. INITIALIZE CLERK AUTH
+  const { getToken } = useAuth();
 
-  // 1. Fetch Existing Branding
+  // 1. Fetch Existing Branding (SECURED)
   useEffect(() => {
     const fetchBranding = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/vendors/${vendorId}/profile`);
+        const token = await getToken(); // Grab token
+        const res = await fetch(`${API_URL}/api/vendors/${vendorId}/profile`, {
+          headers: { 'Authorization': `Bearer ${token}` } // Attach badge
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.primaryColor) setPrimaryColor(data.primaryColor);
@@ -33,17 +40,21 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
     };
     
     if (vendorId) fetchBranding();
-  }, [vendorId]);
+  }, [vendorId]); // Include getToken in dependencies if your linter complains, but it's usually stable
 
-  // 2. Save Branding to Database
+  // 2. Save Branding to Database (SECURED)
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     
     try {
+      const token = await getToken(); // Grab token
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/branding`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // Attach badge
+        },
         body: JSON.stringify({ primaryColor, theme, logoUrl, bannerUrl }),
       });
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase'; // 👈 MAKE SURE THIS PATH MATCHES YOUR SETUP
+import { useAuth } from '@clerk/clerk-react'; // 👈 1. IMPORT CLERK AUTH
 
 // Define the shape of your data based on your Prisma schema
 type MenuItem = {
@@ -32,10 +33,16 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
 
   const API_URL = import.meta.env.VITE_API_URL;
 
-  // 1. Fetch Menu Data
+  // 👇 2. INITIALIZE CLERK AUTH
+  const { getToken } = useAuth();
+
+  // 1. Fetch Menu Data (SECURED)
   const fetchMenu = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`);
+      const token = await getToken(); // Grab the token
+      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`, {
+        headers: { 'Authorization': `Bearer ${token}` } // Send it to the bouncer
+      });
       if (res.ok) {
         const data = await res.json();
         setItems(data.items);
@@ -51,31 +58,28 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
     if (vendorId) fetchMenu();
   }, [vendorId]);
 
-  // 👇 NEW: Safe File Selection Handler (2MB Limit)
+  // Safe File Selection Handler
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
       toast.error("Image must be smaller than 2MB");
-      e.target.value = ''; // Reset the input
+      e.target.value = ''; 
       return;
     }
-    
     setImageFile(file);
   };
 
-  // 2. Add New Item (UPGRADED WITH UPLOAD LOGIC)
+  // 2. Add New Item (SECURED)
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     let finalImageUrl = null;
     
     try {
-      // Step A: Upload Image to Supabase FIRST
       if (imageFile) {
         setIsUploadingImage(true);
-        
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${vendorId}-${Date.now()}.${fileExt}`;
 
@@ -83,44 +87,29 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
           .from('menu-items')
           .upload(fileName, imageFile);
 
-        if (uploadError) {
-          console.error("Supabase Upload Error:", uploadError);
-          throw new Error("Failed to upload image to bucket");
-        }
+        if (uploadError) throw new Error("Failed to upload image");
 
-        const { data } = supabase.storage
-          .from('menu-items')
-          .getPublicUrl(fileName);
-          
+        const { data } = supabase.storage.from('menu-items').getPublicUrl(fileName);
         finalImageUrl = data.publicUrl;
         setIsUploadingImage(false);
       }
 
-      // Step B: Send all data to Render backend
+      const token = await getToken(); // Grab the token
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // Send it to the bouncer
+        },
         body: JSON.stringify({ 
-          name, 
-          category, 
-          price: Number(price), 
-          prep, 
-          veg, 
-          available: true,
-          imageUrl: finalImageUrl // 👈 SENDING URL TO BACKEND
+          name, category, price: Number(price), prep, veg, available: true, imageUrl: finalImageUrl 
         }),
       });
 
       if (res.ok) {
         toast.success("Item added to menu!");
         fetchMenu(); 
-        
-        // Clear the form
-        setName('');
-        setPrice('');
-        setPrep('10 min');
-        setImageFile(null);
-        // Reset file input element visually
+        setName(''); setPrice(''); setPrep('10 min'); setImageFile(null);
         const fileInput = document.getElementById('image-upload') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
       } else {
@@ -134,12 +123,16 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
     }
   };
 
-  // 3. Toggle Availability
+  // 3. Toggle Availability (SECURED)
   const toggleAvailable = async (itemId: string, currentStatus: boolean) => {
     try {
+      const token = await getToken();
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${itemId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify({ available: !currentStatus }),
       });
 
@@ -152,13 +145,15 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
     }
   };
 
-  // 4. Delete Item
+  // 4. Delete Item (SECURED)
   const deleteItem = async (itemId: string) => {
     if (!window.confirm("Are you sure you want to delete this item?")) return;
     
     try {
+      const token = await getToken();
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${itemId}`, {
         method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (res.ok) {

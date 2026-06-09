@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { id: 'analytics', label: 'Analytics', icon: '📈' },
   { id: 'qr-code', label: 'My QR code', icon: '📱' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },
+  { id: 'payment-settings', label: 'Payment Setup', icon: '💳' } // 👈 ADD THIS LINE
 ];
 
 // We pass in two "props": the current tab, and the function to change it

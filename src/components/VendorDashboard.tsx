@@ -9,6 +9,7 @@ import OffersPromos from './OffersPromos';
 import MyQRCode from './MyQRCode';
 import Settings from './Settings';
 import BrandingStudio from './BrandingStudio';
+import PaymentSettings from './PaymentSettings'; // 👈 1. ADD THIS IMPORT
 
 export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorId: string }) {
   const { userId, isLoaded } = useAuth(); // Grab the real Google ID!
@@ -60,6 +61,9 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
 
           {/* Branding Studio */}
           {activeTab === 'branding' && <BrandingStudio vendorId={userId} />}
+
+          {/* 💳 2. ADD THE PAYMENT SETTINGS HERE */}
+          {activeTab === 'payment-settings' && <PaymentSettings vendorId={realVendorId} />}
         </main>
       </div>
     </div>

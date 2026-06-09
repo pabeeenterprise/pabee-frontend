@@ -237,17 +237,33 @@ export default function Checkout({ vendorId, onBack }: { vendorId: string, onBac
           ) : (
             <form onSubmit={handlePlaceOrder} className="space-y-4">
               
-              {/* 💳 DYNAMIC QR CODE DISPLAY */}
+              {/* 💳 DYNAMIC UPI PAYMENT DISPLAY */}
               {paymentMode === 'UPI' && vendorPayment?.available && (
-                <div className="bg-[#0B0E14] border border-gray-800 rounded-xl p-4 text-center mb-6">
-                  <h3 className="text-white font-bold mb-2">Scan & Pay ₹{finalTotal}</h3>
+                <div className="bg-[#0B0E14] border border-gray-800 rounded-xl p-5 text-center mb-6 shadow-lg">
+                  <h3 className="text-[#E5B35C] font-serif text-xl mb-4">Amount Due: ₹{finalTotal}</h3>
+                  
+                  {/* 1. THE DEEP LINK BUTTON (Mobile Primary) */}
+                  <a 
+                    href={`upi://pay?pa=${vendorPayment.upiId}&pn=Restaurant%20Order&am=${finalTotal}&cu=INR`}
+                    // ✅ CORRECT
+                        className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md hover:bg-blue-700 transition-colors mb-6 flex items-center justify-center gap-2"                  >
+                    <span>⚡</span> Open UPI App to Pay
+                  </a>
+
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="flex-1 h-px bg-gray-800"></div>
+                    <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Or Scan</span>
+                    <div className="flex-1 h-px bg-gray-800"></div>
+                  </div>
+
+                  {/* 2. THE FALLBACK QR CODE (Desktop/Secondary) */}
                   {vendorPayment.qrImagePath ? (
-                    <img src={vendorPayment.qrImagePath} alt="Vendor QR Code" className="w-48 h-48 mx-auto rounded-lg mb-3 object-contain bg-white p-2" />
+                    <img src={vendorPayment.qrImagePath} alt="Vendor QR Code" className="w-40 h-40 mx-auto rounded-lg mb-3 object-contain bg-white p-2" />
                   ) : (
-                    <div className="w-48 h-48 mx-auto border-2 border-dashed border-gray-700 flex items-center justify-center text-gray-500 text-xs mb-3">No QR Uploaded</div>
+                    <div className="w-40 h-40 mx-auto border-2 border-dashed border-gray-700 flex items-center justify-center text-gray-500 text-xs mb-3">No QR Uploaded</div>
                   )}
                   <p className="text-xs text-gray-400 mb-1">UPI ID: <span className="text-white font-mono">{vendorPayment.upiId}</span></p>
-                  <p className="text-[10px] text-[#E5B35C] mt-2">⚠️ Keep your success screen open to show the waiter!</p>
+                  <p className="text-[10px] text-red-400 mt-3 font-bold uppercase">⚠️ Do not close this page until payment is sent!</p>
                 </div>
               )}
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import RevenueTab, { AnalyticsData } from './analytics/RevenueTab';
 import MenuMatrixTab from './analytics/MenuMatrixTab'; // 👈 1. Note: Removed the interface import from here
+import HeatmapTab from './analytics/HeatmapTab';
 
 // 👈 2. Updated MOCK_DATA to satisfy the new interface requirement
 const MOCK_DATA: AnalyticsData = {
@@ -47,6 +48,32 @@ const MOCK_DATA: AnalyticsData = {
       { name: 'Sev Puri', margin: 63 },
       { name: 'Cheese Vada Pav', margin: 63 }
     ]
+  },
+
+  heatmap: {
+    hourly: [
+      { time: '9AM', intensity: 0.1 },
+      { time: '10', intensity: 0.15 },
+      { time: '11', intensity: 0.3 },
+      { time: '12PM', intensity: 0.8 }, // Lunch rush
+      { time: '1', intensity: 0.85 },
+      { time: '2', intensity: 0.5 },
+      { time: '3', intensity: 0.2 },    // Slow
+      { time: '4', intensity: 0.3 },
+      { time: '5', intensity: 0.6 },
+      { time: '6PM', intensity: 0.95 }, // Dinner peak
+      { time: '7', intensity: 1.0 },    // Max
+      { time: '8PM', intensity: 0.8 }
+    ],
+    peakHours: [
+      { timeRange: '6–8 PM', percentage: 90 },
+      { timeRange: '12–2 PM', percentage: 82 },
+      { timeRange: '8–10 PM', percentage: 72 }
+    ],
+    slowTip: {
+      title: '3–5 PM is your slowest',
+      subtitle: 'A "Teatime special" during 3–5 PM can boost revenue by ~₹400/day.'
+    }
   }
 };
 
@@ -163,9 +190,17 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
         {activeTab === 'revenue' && <RevenueTab data={data} />}
         
         {/* 👈 3. The Menu Matrix component is wired in here */}
-        {activeTab === 'menu-matrix' && <MenuMatrixTab data={data.menuMatrix} />}
+        {/* 🛡️ THE FIX: Check if menuMatrix exists before rendering, otherwise show a placeholder */}
+        {activeTab === 'menu-matrix' && (
+          data.menuMatrix 
+            ? <MenuMatrixTab data={data.menuMatrix} /> 
+            : <div className="text-[#E5B35C] p-12 border border-[#1F2330] bg-[#13161F] rounded-xl text-center mt-4 shadow-md font-medium animate-pulse">
+                Building Real Menu Matrix from Database...
+              </div>
+        )}
         
-        {activeTab === 'heatmap' && <div className="text-gray-500 p-12 border border-dashed border-gray-800 rounded-xl text-center mt-4">Heatmap Component</div>}
+        {/* 👈 REPLACE THE PLACEHOLDER WITH THIS: */}
+        {activeTab === 'heatmap' && <HeatmapTab data={data.heatmap} />}
         
         {activeTab === 'customers' && <div className="text-gray-500 p-12 border border-dashed border-gray-800 rounded-xl text-center mt-4">Customers Component</div>}
         

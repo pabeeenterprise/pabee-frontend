@@ -1,4 +1,7 @@
 import { MenuMatrixData } from './MenuMatrixTab'; // 👈 1. Import the matrix type here
+import { HeatmapData } from './HeatmapTab'; // 👈 ADD THIS LINE
+
+
 export interface AnalyticsData {
     revenue: string;
     orders: number;
@@ -7,6 +10,7 @@ export interface AnalyticsData {
     paymentSplit: { label: string; percentage: number; color: string }[];
     topItems: { id: number; name: string; sold: number }[];
     menuMatrix: MenuMatrixData; // 👈 2. Add the matrix requirement here
+    heatmap: HeatmapData; // 👈 ADD THIS LINE
     // Keeping these optional so the interface doesn't break if you add them back later
     peakHours?: { label: string; percentage: number }[];
     trend?: number[];

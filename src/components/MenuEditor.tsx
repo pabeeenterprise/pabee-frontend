@@ -150,7 +150,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
 
       const token = await getToken();
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${editingItem.id}`, {
-        method: 'PUT', // Using standard PUT to synchronize entire item resource snapshot
+        method: 'PATCH', // Using standard PUT to synchronize entire item resource snapshot
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`

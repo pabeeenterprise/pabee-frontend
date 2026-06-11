@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import RevenueTab, { AnalyticsData } from './analytics/RevenueTab';
-import MenuMatrixTab from './analytics/MenuMatrixTab'; // 👈 1. Note: Removed the interface import from here
+import MenuMatrixTab from './analytics/MenuMatrixTab'; 
 import HeatmapTab from './analytics/HeatmapTab';
+import CustomersTab from './analytics/CustomersTab';
 
-// 👈 2. Updated MOCK_DATA to satisfy the new interface requirement
 const MOCK_DATA: AnalyticsData = {
   revenue: "324",
   orders: 2,
@@ -49,20 +49,19 @@ const MOCK_DATA: AnalyticsData = {
       { name: 'Cheese Vada Pav', margin: 63 }
     ]
   },
-
   heatmap: {
     hourly: [
       { time: '9AM', intensity: 0.1 },
       { time: '10', intensity: 0.15 },
       { time: '11', intensity: 0.3 },
-      { time: '12PM', intensity: 0.8 }, // Lunch rush
+      { time: '12PM', intensity: 0.8 }, 
       { time: '1', intensity: 0.85 },
       { time: '2', intensity: 0.5 },
-      { time: '3', intensity: 0.2 },    // Slow
+      { time: '3', intensity: 0.2 },    
       { time: '4', intensity: 0.3 },
       { time: '5', intensity: 0.6 },
-      { time: '6PM', intensity: 0.95 }, // Dinner peak
-      { time: '7', intensity: 1.0 },    // Max
+      { time: '6PM', intensity: 0.95 }, 
+      { time: '7', intensity: 1.0 },    
       { time: '8PM', intensity: 0.8 }
     ],
     peakHours: [
@@ -74,6 +73,17 @@ const MOCK_DATA: AnalyticsData = {
       title: '3–5 PM is your slowest',
       subtitle: 'A "Teatime special" during 3–5 PM can boost revenue by ~₹400/day.'
     }
+  },
+  customers: {
+    confirmedOrders: 2,
+    repeatRate: 38,
+    ltv: 518,
+    orderSizeBreakdown: [
+      { range: '₹0–50', count: 0 },
+      { range: '₹51–100', count: 0 },
+      { range: '₹101–150', count: 1 },
+      { range: '₹150+', count: 1 }
+    ]
   }
 };
 
@@ -189,8 +199,6 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
       <div className="min-h-[400px]">
         {activeTab === 'revenue' && <RevenueTab data={data} />}
         
-        {/* 👈 3. The Menu Matrix component is wired in here */}
-        {/* 🛡️ THE FIX: Check if menuMatrix exists before rendering, otherwise show a placeholder */}
         {activeTab === 'menu-matrix' && (
           data.menuMatrix 
             ? <MenuMatrixTab data={data.menuMatrix} /> 
@@ -198,14 +206,24 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
                 Building Real Menu Matrix from Database...
               </div>
         )}
+
+        {activeTab === 'customers' && (
+          data.customers
+            ? <CustomersTab data={data.customers} />
+            : <div className="text-[#E5B35C] p-12 border border-[#1F2330] bg-[#13161F] rounded-xl text-center mt-4 shadow-md font-medium animate-pulse">
+                Calculating Customer Metrics...
+              </div>
+        )}
         
-        {/* 👈 REPLACE THE PLACEHOLDER WITH THIS: */}
-        {activeTab === 'heatmap' && <HeatmapTab data={data.heatmap} />}
-        
-        {activeTab === 'customers' && <div className="text-gray-500 p-12 border border-dashed border-gray-800 rounded-xl text-center mt-4">Customers Component</div>}
+        {activeTab === 'heatmap' && (
+          data.heatmap 
+            ? <HeatmapTab data={data.heatmap} /> 
+            : <div className="text-[#E5B35C] p-12 border border-[#1F2330] bg-[#13161F] rounded-xl text-center mt-4 shadow-md font-medium animate-pulse">
+                Assembling Heatmap Engine...
+              </div>
+        )}
         
         {activeTab === 'forecast' && <div className="text-gray-500 p-12 border border-dashed border-gray-800 rounded-xl text-center mt-4">Forecast Component</div>}
-        
         {activeTab === 'insights' && <div className="text-gray-500 p-12 border border-dashed border-gray-800 rounded-xl text-center mt-4">Insights Component</div>}
       </div>
 

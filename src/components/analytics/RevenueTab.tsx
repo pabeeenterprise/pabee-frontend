@@ -1,6 +1,6 @@
 import { MenuMatrixData } from './MenuMatrixTab'; // 👈 1. Import the matrix type here
 import { HeatmapData } from './HeatmapTab'; // 👈 ADD THIS LINE
-
+import { CustomersData } from './CustomersTab'; // 👈 1. Import it here
 
 export interface AnalyticsData {
     revenue: string;
@@ -11,6 +11,8 @@ export interface AnalyticsData {
     topItems: { id: number; name: string; sold: number }[];
     menuMatrix: MenuMatrixData; // 👈 2. Add the matrix requirement here
     heatmap: HeatmapData; // 👈 ADD THIS LINE
+    customers: CustomersData; // 👈 2. Add it to the main interface
+
     // Keeping these optional so the interface doesn't break if you add them back later
     peakHours?: { label: string; percentage: number }[];
     trend?: number[];

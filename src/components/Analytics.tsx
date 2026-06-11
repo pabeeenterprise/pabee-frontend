@@ -103,10 +103,18 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
-        if (res.ok) {
-          const realData = await res.json();
-          setData(realData); 
-        }
+        // ✅ SECURE STATE MERGE
+if (res.ok) {
+  const realData = await res.json();
+  setData(prev => ({
+    ...prev,
+    ...realData,
+    // Preserve mock blocks if the database payload leaves them out
+    menuMatrix: realData.menuMatrix || prev.menuMatrix,
+    heatmap: realData.heatmap || prev.heatmap,
+    customers: realData.customers || prev.customers
+  })); 
+}
       } catch (error) {
         console.error("Failed to load analytics", error);
       } finally {

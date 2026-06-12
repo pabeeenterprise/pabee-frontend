@@ -13,19 +13,19 @@ interface UPIOrderProps {
 export default function UPICheckout({ merchantVPA, merchantName, amount, orderId, onProcessOrder }: UPIOrderProps) {
   const [isLaunching, setIsLaunching] = useState(false);
 
-  // 1. Force strict 2-decimal float (PhonePe rejects "1", demands "1.00")
+  // 1. Force strict 2-decimal float
   const formattedAmount = Number(amount).toFixed(2);
 
-  // 2. Strip hyphens from Prisma UUID to fit NPCI's 35-character limit for 'tr'
-  // (Changes "550e8400-e29b-41d4-a716-446655440000" to "550e8400e29b41d4a716446655440000")
-  const safeOrderId = orderId.replace(/-/g, '').substring(0, 35);
-
-  // 3. Safely encode spaces in the vendor name
+  // 2. Safely encode spaces in the vendor name
   const encodedName = encodeURIComponent(merchantName);
 
-  // 4. Construct the crash-proof intent string
-  const upiLink = `upi://pay?pa=${merchantVPA}&pn=${encodedName}&am=${formattedAmount}&tr=${safeOrderId}&cu=INR`;
+  // 3. Create a short, safe Transaction Note (tn) instead of a Reference ID (tr)
+  // This will just show up in the customer's bank statement like "Order 550e8400"
+  const safeNote = `Order ${orderId.substring(0, 8)}`;
 
+  // 4. THE FIX: The absolute minimal string. NO "tr=" PARAMETER.
+  const upiLink = `upi://pay?pa=${merchantVPA}&pn=${encodedName}&am=${formattedAmount}&tn=${encodeURIComponent(safeNote)}&cu=INR`;
+  
   const handleMobileIntent = async () => {
     setIsLaunching(true);
     await onProcessOrder(); 

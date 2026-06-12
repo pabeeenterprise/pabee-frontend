@@ -10,22 +10,18 @@ interface UPIOrderProps {
   onProcessOrder: () => Promise<void>; 
 }
 
-export default function UPICheckout({ merchantVPA, merchantName, amount, orderId, onProcessOrder }: UPIOrderProps) {
+export default function UPICheckout({ merchantVPA, merchantName, amount, /*orderId,*/ onProcessOrder }: UPIOrderProps) {
   const [isLaunching, setIsLaunching] = useState(false);
 
-  // 1. Force strict 2-decimal float
-  const formattedAmount = Number(amount).toFixed(2);
+  // 🛑 COMMENT OUT THE DYNAMIC STRING
+  // const formattedAmount = Number(amount).toFixed(2);
+  // const encodedName = encodeURIComponent(merchantName);
+  // const safeNote = `Order ${orderId.substring(0, 8)}`;
+  // const upiLink = `upi://pay?pa=${merchantVPA}&pn=${encodedName}&am=${formattedAmount}&tn=${encodeURIComponent(safeNote)}&cu=INR`;
 
-  // 2. Safely encode spaces in the vendor name
-  const encodedName = encodeURIComponent(merchantName);
+  // 🟢 PASTE THIS EXACT HARDCODED STRING (Change the email to your personal YBL/Axis/Paytm VPA)
+  const upiLink = "upi://pay?pa=your_personal_handle@ybl&pn=Test%20Store&am=1.00&cu=INR";
 
-  // 3. Create a short, safe Transaction Note (tn) instead of a Reference ID (tr)
-  // This will just show up in the customer's bank statement like "Order 550e8400"
-  const safeNote = `Order ${orderId.substring(0, 8)}`;
-
-  // 4. THE FIX: The absolute minimal string. NO "tr=" PARAMETER.
-  const upiLink = `upi://pay?pa=${merchantVPA}&pn=${encodedName}&am=${formattedAmount}&tn=${encodeURIComponent(safeNote)}&cu=INR`;
-  
   const handleMobileIntent = async () => {
     setIsLaunching(true);
     await onProcessOrder(); 

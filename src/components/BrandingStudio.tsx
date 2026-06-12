@@ -59,23 +59,34 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
       return;
     }
 
+    // 1. INSTANT UI UPDATE: Create a temporary local URL so the preview updates immediately
+    const instantLocalUrl = URL.createObjectURL(file);
+    if (target === 'logo') setLogoUrl(instantLocalUrl);
+    if (target === 'banner') setBannerUrl(instantLocalUrl);
+
     setIsUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${vendorId}-${target}-${Date.now()}.${fileExt}`;
+      
+      // 2. BACKGROUND UPLOAD: Send to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('vendor-assets')
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
+      // 3. REPLACE LOCAL URL: Swap the fake URL for the permanent Supabase URL
       const { data } = supabase.storage.from('vendor-assets').getPublicUrl(fileName);
+      
       if (target === 'logo') setLogoUrl(data.publicUrl);
       if (target === 'banner') setBannerUrl(data.publicUrl);
-      toast.success(`${target === 'logo' ? 'Logo' : 'Banner'} uploaded successfully!`);
+      
+      // 4. INSTRUCT THE VENDOR: Warn them they must save the database
+      toast.success(`${target === 'logo' ? 'Logo' : 'Banner'} uploaded! Click 'Save Branding' to lock it in.`);
     } catch (err) {
-      console.error("SUPABASE UPLOAD REJECTED:", err);
-      toast.error("Upload pipeline failed");
+      console.error("Upload pipeline failed:", err);
+      toast.error("Storage upload failed. Check console.");
     } finally {
       setIsUploading(false);
     }

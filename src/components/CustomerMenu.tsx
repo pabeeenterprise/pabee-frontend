@@ -45,6 +45,8 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           }
           
           const profileData = await profileRes.json();
+          // 🛑 ADD THIS LINE:
+          console.log("🚨 RAW BACKEND DATA:", profileData);
           
           // 2. THE FIX: Correctly map the nested branding data
           setVendorProfile({

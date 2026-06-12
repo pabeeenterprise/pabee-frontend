@@ -1,22 +1,35 @@
 import { useState } from 'react';
+// Make sure to import your QR library if you want to show it on desktop!
+// import QRCode from 'react-qr-code'; 
 
 interface UPIOrderProps {
   merchantVPA: string;
   merchantName: string;
   amount: number;
   orderId: string;
-  onProcessOrder: () => Promise<void>; // 👈 NEW PROP
+  onProcessOrder: () => Promise<void>; 
 }
 
 export default function UPICheckout({ merchantVPA, merchantName, amount, orderId, onProcessOrder }: UPIOrderProps) {
   const [isLaunching, setIsLaunching] = useState(false);
+
+  // 1. Force strict 2-decimal float (PhonePe rejects "1", demands "1.00")
+  const formattedAmount = Number(amount).toFixed(2);
+
+  // 2. Strip hyphens from Prisma UUID to fit NPCI's 35-character limit for 'tr'
+  // (Changes "550e8400-e29b-41d4-a716-446655440000" to "550e8400e29b41d4a716446655440000")
+  const safeOrderId = orderId.replace(/-/g, '').substring(0, 35);
+
+  // 3. Safely encode spaces in the vendor name
   const encodedName = encodeURIComponent(merchantName);
-  const upiLink = `upi://pay?pa=${merchantVPA}&pn=${encodedName}&am=${amount}&tr=${orderId}&cu=INR`;
+
+  // 4. Construct the crash-proof intent string
+  const upiLink = `upi://pay?pa=${merchantVPA}&pn=${encodedName}&am=${formattedAmount}&tr=${safeOrderId}&cu=INR`;
 
   const handleMobileIntent = async () => {
     setIsLaunching(true);
-    await onProcessOrder(); // 👈 Wait for the database to save the order
-    window.location.href = upiLink; // 👈 THEN open Google Pay/PhonePe
+    await onProcessOrder(); 
+    window.location.href = upiLink; 
     setIsLaunching(false);
   };
 

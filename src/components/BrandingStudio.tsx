@@ -74,6 +74,7 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
       if (target === 'banner') setBannerUrl(data.publicUrl);
       toast.success(`${target === 'logo' ? 'Logo' : 'Banner'} uploaded successfully!`);
     } catch (err) {
+      console.error("SUPABASE UPLOAD REJECTED:", err);
       toast.error("Upload pipeline failed");
     } finally {
       setIsUploading(false);

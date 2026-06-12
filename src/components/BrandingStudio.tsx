@@ -64,12 +64,12 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
       const fileExt = file.name.split('.').pop();
       const fileName = `${vendorId}-${target}-${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage
-        .from('vendor-branding')
+        .from('vendor-assets')
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from('vendor-branding').getPublicUrl(fileName);
+      const { data } = supabase.storage.from('vendor-assets').getPublicUrl(fileName);
       if (target === 'logo') setLogoUrl(data.publicUrl);
       if (target === 'banner') setBannerUrl(data.publicUrl);
       toast.success(`${target === 'logo' ? 'Logo' : 'Banner'} uploaded successfully!`);

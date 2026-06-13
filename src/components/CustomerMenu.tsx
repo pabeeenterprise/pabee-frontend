@@ -51,13 +51,13 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           // 2. THE FIX: Correctly map the nested branding data
           setVendorProfile({
             id: profileData.id,
-            name: profileData.storeName || profileData.name || 'Your Store',
-            logoUrl: profileData.branding?.logoUrl || null,
-            bannerUrl: profileData.branding?.bannerUrl || null,
-            accentColor: profileData.branding?.accentColor || '#E5B35C',
-            themeMode: profileData.branding?.themeMode || 'dark',
-            fontFamily: profileData.branding?.fontFamily || 'font-sans',
-            buttonRoundness: profileData.branding?.buttonRoundness || 'rounded-xl'
+            name: profileData.name || 'Your Store',
+            logoUrl: profileData.logoUrl || null,
+            bannerUrl: profileData.bannerUrl || null,
+            accentColor: profileData.accentColor || '#E5B35C',
+            themeMode: profileData.themeMode || 'dark',
+            fontFamily: profileData.fontFamily || 'font-sans',
+            buttonRoundness: profileData.buttonRoundness || 'rounded-xl'
           });
 
           const realDbId = profileData.id;

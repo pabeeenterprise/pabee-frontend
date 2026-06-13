@@ -11,7 +11,6 @@ interface MenuItem {
   imageUrl?: string | null; 
 }
 
-// 1. UPDATED INTERFACE: Strictly matches the database keys
 interface VendorProfile {
   id: string;
   name: string;
@@ -29,14 +28,15 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
   const { addToCart, cartCount } = useCart();
-  
   const [activePromoBanner, setActivePromoBanner] = useState<string | null>(null);
+
+  // Trigger re-animation when category changes
+  const [animateKey, setAnimateKey] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
         try {
           const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend.onrender.com';
-
           const profileRes = await fetch(`${API_URL}/api/vendors/${vendorId}/profile`);
           
           if (!profileRes.ok) {
@@ -45,9 +45,7 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           }
           
           const profileData = await profileRes.json();
-        
           
-          // 2. THE FIX: Correctly map the nested branding data
           setVendorProfile({
             id: profileData.id,
             name: profileData.name || 'Your Store',
@@ -64,11 +62,7 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           const menuRes = await fetch(`${API_URL}/api/vendors/${realDbId}/menu`);
           if (menuRes.ok) {
             const menuData = await menuRes.json();
-            if (menuData.items && Array.isArray(menuData.items)) {
-               setMenu(menuData.items);
-            } else {
-               setMenu([]);
-            }
+            setMenu(menuData.items && Array.isArray(menuData.items) ? menuData.items : []);
           }
   
           const promoRes = await fetch(`${API_URL}/api/vendors/${realDbId}/promos`);
@@ -77,7 +71,7 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
             const active = promoData.promos?.find((p: any) => p.isActive);
             if (active) {
               const discountText = active.type === 'FLAT' ? `₹${active.value} OFF` : `${active.value}% OFF`;
-              setActivePromoBanner(`🎉 Use code ${active.code} for ${discountText} on orders over ₹${active.minOrderValue}!`);
+              setActivePromoBanner(`🎉 Code ${active.code} • ${discountText} on orders over ₹${active.minOrderValue}`);
             }
           }
         } catch (err) {
@@ -90,145 +84,172 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
     fetchData();
   }, [vendorId]);
 
+  // Reset the animation sequence every time the category is tapped
+  useEffect(() => {
+    setAnimateKey(prev => prev + 1);
+  }, [activeCategory]);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#121212] flex items-center justify-center">
-        <p className="font-medium text-gray-400 animate-pulse">Loading menu...</p>
+      <div className="min-h-screen bg-[#0B0E14] flex flex-col items-center justify-center gap-4">
+        <div className="w-12 h-12 border-4 border-gray-800 border-t-[#E5B35C] rounded-full animate-spin"></div>
+        <p className="text-sm font-bold text-gray-500 uppercase tracking-widest animate-pulse">Crafting Menu</p>
       </div>
     );
   }
 
   if (!vendorProfile) {
     return (
-      <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center text-center px-6">
-        <span className="text-5xl mb-4">🍽️</span>
-        <h2 className="text-2xl font-bold text-white mb-2">Menu Not Found</h2>
-        <p className="text-gray-400">
-          We couldn't find this restaurant. Please make sure you scanned a valid QR code!
-        </p>
+      <div className="min-h-screen bg-[#0B0E14] flex flex-col items-center justify-center text-center px-6">
+        <div className="w-24 h-24 bg-gray-900 rounded-full flex items-center justify-center mb-6 animate-bounce">
+          <span className="text-4xl">🍽️</span>
+        </div>
+        <h2 className="text-3xl font-bold text-white mb-2">Menu Not Found</h2>
+        <p className="text-gray-500 max-w-xs">We couldn't locate this restaurant. Please scan the QR code again.</p>
       </div>
     );
   }
 
-  // 3. THE FIX: Use themeMode instead of theme
   const isDark = vendorProfile.themeMode === 'dark';
   const bgColor = isDark ? 'bg-[#0B0E14]' : 'bg-[#F9FAFB]';
-  const headerBg = isDark ? 'bg-[#121212]/95' : 'bg-white/95';
   const cardBg = isDark ? 'bg-[#13161F]' : 'bg-white';
   const textColor = isDark ? 'text-gray-100' : 'text-gray-900';
   const mutedText = isDark ? 'text-gray-400' : 'text-gray-500';
-  const borderColor = isDark ? 'border-gray-800' : 'border-gray-200';
+  const borderColor = isDark ? 'border-gray-800/60' : 'border-gray-200';
 
   const categories = ['All', ...new Set(menu.map((item) => item.category))];
-  const displayedItems = activeCategory === 'All' 
-    ? menu 
-    : menu.filter(item => item.category === activeCategory);
+  const displayedItems = activeCategory === 'All' ? menu : menu.filter(item => item.category === activeCategory);
 
   return (
-    // 4. THE FIX: Inject fontFamily into the root wrapper
-    <div className={`min-h-screen ${bgColor} ${textColor} pb-24 ${vendorProfile.fontFamily} transition-colors duration-300`}>
+    <div className={`min-h-screen ${bgColor} ${textColor} pb-32 ${vendorProfile.fontFamily} transition-colors duration-500 selection:bg-gray-700`}>
       
+      {/* 1. CSS INJECTION: High-Performance Hardware Accelerated Keyframes */}
+      <style>{`
+        @keyframes cascadeUp {
+          0% { opacity: 0; transform: translateY(20px) scale(0.98); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .cascade-item {
+          opacity: 0;
+          animation: cascadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .glass-nav {
+          background: ${isDark ? 'rgba(11, 14, 20, 0.7)' : 'rgba(255, 255, 255, 0.8)'};
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+        }
+      `}</style>
+
+      {/* 2. PROMO BANNER: Marquee Style */}
       {activePromoBanner && (
         <div 
-          className="text-black text-xs font-bold text-center py-2 px-4 shadow-md tracking-wide"
-          style={{ backgroundColor: vendorProfile.accentColor }} // 5. THE FIX: accentColor everywhere
+          className="text-[#0B0E14] text-xs font-bold text-center py-2.5 px-4 tracking-wider z-50 relative overflow-hidden"
+          style={{ backgroundColor: vendorProfile.accentColor }} 
         >
-          {activePromoBanner}
+          <span className="relative z-10">{activePromoBanner}</span>
         </div>
       )}
 
-      <div className={`sticky top-0 ${headerBg} backdrop-blur-md border-b ${borderColor} z-10 shadow-sm`}>
+      {/* 3. HERO SECTION: Parallax Fade */}
+      <div className="relative w-full h-56 md:h-72 lg:h-80 overflow-hidden bg-gray-900">
+        {vendorProfile.bannerUrl ? (
+          <img src={vendorProfile.bannerUrl} alt="Banner" className="w-full h-full object-cover opacity-70 transform scale-105" />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900"></div>
+        )}
         
-        <div className="h-32 md:h-48 lg:h-64 w-full bg-gray-800 relative border-b border-black/20">
-          {vendorProfile.bannerUrl ? (
-            <img src={vendorProfile.bannerUrl} alt="Banner" className="w-full h-full object-cover opacity-80" />
-          ) : (
-             <div className="w-full h-full bg-gradient-to-r from-gray-800 to-gray-700"></div>
-          )}
-          
-          <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 w-20 h-20 ${cardBg} rounded-full flex items-center justify-center shadow-lg border-4 ${borderColor} overflow-hidden`}>
-             {vendorProfile.logoUrl ? (
-               <img src={vendorProfile.logoUrl} alt="Logo" className="w-full h-full object-cover" />
-             ) : (
-               <span className="text-3xl">🍲</span>
-             )}
-          </div>
-        </div>
+        {/* The Magic Fade Gradient */}
+        <div className={`absolute inset-0 bg-gradient-to-t ${isDark ? 'from-[#0B0E14]' : 'from-[#F9FAFB]'} via-transparent to-transparent`} />
 
-        <div className="pt-8 pb-3 flex flex-col items-center border-b border-gray-800/50">
-          <h1 className="text-2xl font-bold tracking-tight">{vendorProfile.name}</h1>
-        </div>
-        
-        <div className="flex overflow-x-auto px-4 py-3 space-x-3 no-scrollbar">
-          {categories.map(category => (
-            <button
-              key={category}
-              onClick={() => setActiveCategory(category)}
-              className={`px-5 py-1.5 rounded-full whitespace-nowrap text-sm font-medium transition-all ${
-                activeCategory === category ? 'shadow-md' : 'border border-transparent'
-              }`}
-              style={{
-                backgroundColor: activeCategory === category ? vendorProfile.accentColor : 'transparent',
-                color: activeCategory === category ? '#000' : (isDark ? '#9CA3AF' : '#4B5563'),
-                borderColor: activeCategory === category ? 'transparent' : (isDark ? '#374151' : '#D1D5DB')
-              }}
-            >
-              {category}
-            </button>
-          ))}
+        {/* Floating Avatar */}
+        <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 w-24 h-24 ${cardBg} rounded-full flex items-center justify-center shadow-2xl overflow-hidden ring-4 ${isDark ? 'ring-[#0B0E14]' : 'ring-[#F9FAFB]'} z-10`}>
+           {vendorProfile.logoUrl ? (
+             <img src={vendorProfile.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+           ) : (
+             <span className="text-4xl">🍲</span>
+           )}
         </div>
       </div>
 
-      <div className="p-4 flex flex-col gap-4 max-w-3xl mx-auto mt-2">
-        {displayedItems.length === 0 ? (
-           <p className={`text-center my-10 ${mutedText}`}>No items available in this category.</p>
-        ) : (
-          displayedItems.map(item => (
-            <div key={item.id} className={`${cardBg} rounded-2xl border ${borderColor} p-4 flex gap-4 transition-transform active:scale-[0.98] shadow-sm`}>
-              
-              <div className="flex flex-col flex-grow justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
-                      item.veg ? 'bg-green-900/10 text-green-600 border-green-800/30' : 'bg-red-900/10 text-red-600 border-red-800/30'
-                    }`}>
-                      {item.veg ? 'Veg' : 'Non-Veg'}
-                    </span>
-                  </div>
-                  <h3 className="font-bold text-lg">{item.name}</h3>
-                  <p className={`text-xs mt-1 line-clamp-2 ${mutedText}`}>{item.prep}</p>
-                </div>
-                
-                <div className="flex items-center mt-4">
-                  <span className="font-bold text-lg" style={{ color: vendorProfile.accentColor }}>₹{item.price}</span>
-                </div>
-              </div>
+      <div className="pt-6 pb-2 flex flex-col items-center">
+        <h1 className="text-3xl font-black tracking-tight">{vendorProfile.name}</h1>
+      </div>
+      
+      {/* 4. GLASSMORPHISM NAVIGATION: Sticky Blur Effect */}
+      <div className={`sticky top-0 z-40 glass-nav border-b ${borderColor} transition-all duration-300`}>
+        <div className="flex overflow-x-auto px-4 py-3 space-x-2 no-scrollbar scroll-smooth">
+          {categories.map(category => {
+            const isActive = activeCategory === category;
+            return (
+              <button
+                key={category}
+                onClick={() => setActiveCategory(category)}
+                className={`px-5 py-2 rounded-2xl whitespace-nowrap text-sm font-bold transition-all duration-300 transform active:scale-95 ${
+                  isActive ? 'shadow-lg scale-100' : 'border border-transparent hover:scale-105'
+                }`}
+                style={{
+                  backgroundColor: isActive ? vendorProfile.accentColor : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)'),
+                  color: isActive ? '#0B0E14' : (isDark ? '#9CA3AF' : '#4B5563'),
+                }}
+              >
+                {category}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
-              <div className="flex flex-col items-end justify-between shrink-0">
-              <div className={`w-20 h-20 rounded-xl flex items-center justify-center text-3xl mb-2 border ${borderColor} bg-gray-100 dark:bg-gray-800 overflow-hidden shrink-0`}>
+      {/* 5. DYNAMIC FOOD GRID: Cascading Animations & Hover FX */}
+      <div key={animateKey} className="p-4 flex flex-col gap-4 max-w-3xl mx-auto mt-4">
+        {displayedItems.length === 0 ? (
+           <div className="flex flex-col items-center justify-center py-20 opacity-50 cascade-item">
+             <span className="text-4xl mb-4">🍃</span>
+             <p className={`text-center ${mutedText}`}>Menu items are brewing...</p>
+           </div>
+        ) : (
+          displayedItems.map((item, index) => (
+            <div 
+              key={item.id} 
+              className={`cascade-item group ${cardBg} rounded-[24px] border ${borderColor} p-3 flex gap-4 transition-all duration-300 hover:shadow-xl hover:border-gray-500/30`}
+              style={{ animationDelay: `${index * 60}ms` }} // Stagger math
+            >
+              
+              {/* Image Box with subtle zoom on hover */}
+              <div className={`w-28 h-28 rounded-2xl flex items-center justify-center text-3xl overflow-hidden shrink-0 relative bg-gray-100 dark:bg-gray-800/50`}>
                  {item.imageUrl ? (
                     <img 
                       src={item.imageUrl} 
                       alt={item.name} 
-                      className="w-full h-full object-cover shrink-0"
+                      className="w-full h-full object-cover shrink-0 transition-transform duration-700 group-hover:scale-110"
                     />
                   ) : (
-                    <span className="text-3xl">{item.veg ? '🥗' : '🍗'}</span>
+                    <span className="text-3xl opacity-50">{item.veg ? '🥗' : '🍗'}</span>
                   )}
+                 {/* Premium Veg/Non-Veg indicator bubble */}
+                 <div className={`absolute top-2 left-2 w-4 h-4 rounded-full border-2 border-white/20 backdrop-blur-md shadow-sm ${item.veg ? 'bg-green-500' : 'bg-red-500'}`}></div>
               </div>
-                 
-                 <button 
-                  onClick={() => addToCart(item)} 
-                  // 6. THE FIX: Dynamic button roundness
-                  className={`h-8 w-8 ${vendorProfile.buttonRoundness} font-bold flex items-center justify-center text-xl transition-colors bg-opacity-10 border border-opacity-30 hover:bg-opacity-100`}
-                  style={{ 
-                    color: vendorProfile.accentColor,
-                    borderColor: vendorProfile.accentColor,
-                    backgroundColor: `${vendorProfile.accentColor}1A` 
-                  }}
-                 >
-                  +
-                 </button>
+
+              <div className="flex flex-col flex-grow justify-between py-1 pr-1">
+                <div>
+                  <h3 className="font-bold text-lg leading-tight mb-1">{item.name}</h3>
+                  <p className={`text-xs line-clamp-2 ${mutedText} leading-relaxed`}>{item.prep}</p>
+                </div>
+                
+                <div className="flex items-center justify-between mt-3">
+                  <span className="font-black text-xl tracking-tight" style={{ color: vendorProfile.accentColor }}>₹{item.price}</span>
+                  
+                  {/* Haptic Add Button */}
+                  <button 
+                    onClick={() => addToCart(item)} 
+                    className={`h-10 w-10 ${vendorProfile.buttonRoundness} font-black flex items-center justify-center text-xl transition-all duration-200 active:scale-75 shadow-sm`}
+                    style={{ 
+                      color: vendorProfile.accentColor,
+                      backgroundColor: `${vendorProfile.accentColor}15`,
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
               </div>
               
             </div>
@@ -236,16 +257,30 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
         )}
       </div>
 
+      {/* 6. FLOATING CHECKOUT BAR: Bouncing Entrance & Glow */}
       {cartCount > 0 && (
-        <div className={`fixed bottom-0 left-0 right-0 ${headerBg} border-t ${borderColor} p-4 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.1)] z-50`}>
-          <button 
-            onClick={onGoToCheckout}
-            className={`w-full text-black font-bold py-3.5 ${vendorProfile.buttonRoundness} flex justify-between px-6 transition-transform active:scale-95 shadow-md`}
-            style={{ backgroundColor: vendorProfile.accentColor }}
-          >
-            <span>{cartCount} {cartCount === 1 ? 'Item' : 'Items'}</span>
-            <span className="flex items-center gap-2">View Cart <span className="text-xl">→</span></span>
-          </button>
+        <div className="fixed bottom-6 left-0 right-0 px-4 z-50 cascade-item" style={{ animationDelay: '200ms' }}>
+          <div className="max-w-md mx-auto">
+            <button 
+              onClick={onGoToCheckout}
+              className={`w-full text-[#0B0E14] font-black py-4 ${vendorProfile.buttonRoundness} flex justify-between items-center px-6 transition-all active:scale-95 shadow-2xl relative overflow-hidden group`}
+              style={{ 
+                backgroundColor: vendorProfile.accentColor,
+                boxShadow: `0 10px 25px -5px ${vendorProfile.accentColor}40` // Dynamic colored glow
+              }}
+            >
+              {/* Shiny reflection sweep effect */}
+              <div className="absolute inset-0 w-full h-full bg-white/20 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] transform skew-x-12"></div>
+              
+              <div className="flex items-center gap-3 relative z-10">
+                <span className="bg-[#0B0E14]/10 px-3 py-1 rounded-full text-sm">{cartCount}</span>
+                <span>{cartCount === 1 ? 'Item' : 'Items'} Added</span>
+              </div>
+              <span className="flex items-center gap-2 relative z-10">
+                Checkout <span className="text-xl group-hover:translate-x-1 transition-transform">→</span>
+              </span>
+            </button>
+          </div>
         </div>
       )}
 

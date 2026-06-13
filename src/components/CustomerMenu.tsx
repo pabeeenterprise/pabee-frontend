@@ -139,7 +139,7 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
 
       <div className={`sticky top-0 ${headerBg} backdrop-blur-md border-b ${borderColor} z-10 shadow-sm`}>
         
-        <div className="h-32 w-full bg-gray-800 relative border-b border-black/20">
+        <div className="h-32 md:h-48 lg:h-64 w-full bg-gray-800 relative border-b border-black/20">
           {vendorProfile.bannerUrl ? (
             <img src={vendorProfile.bannerUrl} alt="Banner" className="w-full h-full object-cover opacity-80" />
           ) : (

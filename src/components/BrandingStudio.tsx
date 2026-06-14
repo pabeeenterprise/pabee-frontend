@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '@clerk/clerk-react';
 
+// 🌟 NEW: The exact structure of your database items
 interface PreviewItem {
   id: string;
   name: string;
@@ -17,9 +18,6 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // 🌟 NEW: State to hold the real menu items for the preview
-  const [previewItems, setPreviewItems] = useState<PreviewItem[]>([]);
-
   // Core Branding States
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
   const [accentColor, setAccentColor] = useState('#FF0000');
@@ -32,8 +30,11 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
   const [bannerUrl, setBannerUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
-  // 🌟 NEW: Viewport Engine State
+  // Viewport Engine State
   const [deviceView, setDeviceView] = useState<'mobile' | 'tablet' | 'desktop'>('mobile');
+  
+  // 🌟 NEW: Real Menu Items State
+  const [previewItems, setPreviewItems] = useState<PreviewItem[]>([]);
 
   const { getToken } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend.onrender.com';
@@ -43,7 +44,7 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
       try {
         const token = await getToken();
         
-        // 1. Fetch Branding
+        // 1. Fetch Branding Configurations
         const brandRes = await fetch(`${API_URL}/api/vendors/${vendorId}/branding`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -60,14 +61,15 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
           }
         }
 
-        // 2. Fetch Real Menu Items for Preview
+        // 2. 🌟 NEW: Fetch Real Menu Items for the Preview
         const menuRes = await fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (menuRes.ok) {
           const menuData = await menuRes.json();
-          // Grab up to 6 items to populate the preview grid
-          setPreviewItems(menuData.items ? menuData.items.slice(0, 6) : []);
+          // Debug Trap: Prints exactly what the database handed over
+          console.log("🚨 BRANDING STUDIO MENU FETCH:", menuData); 
+          setPreviewItems(menuData.items && Array.isArray(menuData.items) ? menuData.items.slice(0, 6) : []);
         }
 
       } catch (err) {
@@ -238,7 +240,6 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
           </button>
         </div>
 
-        {/* Viewport Dimension Indicator */}
         <div className="w-full text-center mb-6 text-gray-500 font-mono text-xs z-10 relative">
            <span>{deviceView === 'mobile' ? '📱 Mobile Viewpoint — 390px' : deviceView === 'tablet' ? '📟 Tablet Viewpoint — 768px' : '💻 Desktop Viewpoint — 1024px'}</span>
         </div>
@@ -256,7 +257,6 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
           }} 
         >
           
-          {/* Inner Webview Content (Visual Dummy matching your brand) */}
           <div className={`flex-1 overflow-y-auto no-scrollbar flex flex-col relative transition-colors duration-300 ${themeMode === 'dark' ? 'bg-[#0B0E14] text-white' : 'bg-gray-50 text-gray-900'} ${fontFamily}`}>
             
             <div className={`relative w-full overflow-hidden border-b border-black/20 shrink-0 ${deviceView === 'mobile' ? 'h-32' : 'h-48'}`}>
@@ -280,24 +280,26 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
             <div className="mt-10 px-6 pb-6 flex-1 flex flex-col">
               <h4 className="text-2xl font-bold tracking-tight text-center">{storeName}</h4>
               
-              {/* Category Bar Mockup */}
               <div className="flex overflow-x-auto justify-center gap-2 mt-6 pb-2 no-scrollbar">
                 <span className="px-5 py-1.5 rounded-full text-sm font-bold" style={{ backgroundColor: accentColor, color: '#000' }}>All</span>
                 <span className={`px-5 py-1.5 rounded-full text-sm font-medium border ${themeMode === 'dark' ? 'border-gray-700 text-gray-400' : 'border-gray-300 text-gray-600'}`}>Food</span>
                 <span className={`px-5 py-1.5 rounded-full text-sm font-medium border ${themeMode === 'dark' ? 'border-gray-700 text-gray-400' : 'border-gray-300 text-gray-600'}`}>Drinks</span>
               </div>
 
-              {/* Responsive Grid based on Device View */}
+              {/* 🌟 NEW: Real Database Data Grid */}
               <div className={`w-full mt-6 grid gap-4 ${
                 deviceView === 'mobile' ? 'grid-cols-1' : 
                 deviceView === 'tablet' ? 'grid-cols-2' : 
                 'grid-cols-3'
               }`}>
                 {previewItems.length === 0 ? (
-                  <p className="text-gray-500 text-sm text-center py-10 col-span-full">No menu items found. Add some in the Menu Editor!</p>
+                  <div className="col-span-full py-12 flex flex-col items-center justify-center opacity-50">
+                    <span className="text-3xl mb-2">🍽️</span>
+                    <p className="text-sm font-medium">Add items in the Menu Editor</p>
+                  </div>
                 ) : (
                   previewItems.map((item) => (
-                    <div key={item.id} className={`p-4 rounded-2xl flex gap-4 items-center border ${themeMode === 'dark' ? 'bg-[#13161F] border-gray-800' : 'bg-white border-gray-200 shadow-sm'}`}>
+                    <div key={item.id} className={`p-4 rounded-2xl flex gap-4 items-center border transition-all ${themeMode === 'dark' ? 'bg-[#13161F] border-gray-800 hover:border-gray-600' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'}`}>
                       <div className="flex-1 text-left">
                         <div className="flex items-center gap-1.5 mb-1">
                            <span className="text-[9px]">{item.veg ? '🟢' : '🔴'}</span>
@@ -307,27 +309,26 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
                         <div className="text-lg font-bold" style={{ color: accentColor }}>₹{item.price}</div>
                       </div>
                       <div className="flex flex-col items-end gap-2 shrink-0">
-                         <div className="w-16 h-16 bg-gray-800/50 rounded-xl flex items-center justify-center text-2xl overflow-hidden border border-gray-700/50">
+                         <div className={`w-16 h-16 rounded-xl flex items-center justify-center text-2xl overflow-hidden border ${themeMode === 'dark' ? 'bg-gray-800/50 border-gray-700/50' : 'bg-gray-100 border-gray-200'}`}>
                            {item.imageUrl ? (
                              <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
                            ) : (
                              <span>{item.emoji || '🍲'}</span>
                            )}
                          </div>
-                         <button type="button" className={`px-4 py-1 text-xs font-bold text-black shadow-sm ${buttonRoundness}`} style={{ backgroundColor: accentColor }}>
-                           ADD
+                         <button type="button" className={`px-4 py-1.5 text-[10px] font-black tracking-wider uppercase text-black shadow-sm ${buttonRoundness} transition-transform active:scale-95`} style={{ backgroundColor: accentColor }}>
+                           Add
                          </button>
                       </div>
                     </div>
                   ))
                 )}
               </div>
-            </div>
 
+            </div>
           </div>
         </div>
       </div>
-
     </div>
   );
 }

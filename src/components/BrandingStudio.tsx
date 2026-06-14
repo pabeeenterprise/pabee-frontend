@@ -3,9 +3,22 @@ import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '@clerk/clerk-react';
 
+interface PreviewItem {
+  id: string;
+  name: string;
+  price: number;
+  prep: string;
+  veg: boolean;
+  imageUrl?: string | null;
+  emoji?: string;
+}
+
 export default function BrandingStudio({ vendorId }: { vendorId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  // 🌟 NEW: State to hold the real menu items for the preview
+  const [previewItems, setPreviewItems] = useState<PreviewItem[]>([]);
 
   // Core Branding States
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
@@ -26,14 +39,16 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
   const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend.onrender.com';
 
   useEffect(() => {
-    async function loadBranding() {
+    async function loadBrandingAndMenu() {
       try {
         const token = await getToken();
-        const res = await fetch(`${API_URL}/api/vendors/${vendorId}/branding`, {
+        
+        // 1. Fetch Branding
+        const brandRes = await fetch(`${API_URL}/api/vendors/${vendorId}/branding`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (res.ok) {
-          const data = await res.json();
+        if (brandRes.ok) {
+          const data = await brandRes.json();
           if (data.branding) {
             setThemeMode(data.branding.themeMode || 'dark');
             setAccentColor(data.branding.accentColor || '#FF0000');
@@ -44,13 +59,24 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
             setStoreName(data.storeName || 'Your Store');
           }
         }
+
+        // 2. Fetch Real Menu Items for Preview
+        const menuRes = await fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (menuRes.ok) {
+          const menuData = await menuRes.json();
+          // Grab up to 6 items to populate the preview grid
+          setPreviewItems(menuData.items ? menuData.items.slice(0, 6) : []);
+        }
+
       } catch (err) {
-        console.error("Failed to load layout configs", err);
+        console.error("Failed to load configs", err);
       } finally {
         setIsLoading(false);
       }
     }
-    if (vendorId) loadBranding();
+    if (vendorId) loadBrandingAndMenu();
   }, [vendorId]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'logo' | 'banner') => {
@@ -267,21 +293,34 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
                 deviceView === 'tablet' ? 'grid-cols-2' : 
                 'grid-cols-3'
               }`}>
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className={`p-4 rounded-2xl flex gap-4 items-center border ${themeMode === 'dark' ? 'bg-[#13161F] border-gray-800' : 'bg-white border-gray-200 shadow-sm'}`}>
-                    <div className="flex-1">
-                      <div className="h-4 w-24 bg-gray-600/50 rounded mb-2"></div>
-                      <div className="h-3 w-16 bg-gray-600/30 rounded mb-4"></div>
-                      <div className="h-5 w-12 rounded font-bold" style={{ color: accentColor }}>₹150</div>
+                {previewItems.length === 0 ? (
+                  <p className="text-gray-500 text-sm text-center py-10 col-span-full">No menu items found. Add some in the Menu Editor!</p>
+                ) : (
+                  previewItems.map((item) => (
+                    <div key={item.id} className={`p-4 rounded-2xl flex gap-4 items-center border ${themeMode === 'dark' ? 'bg-[#13161F] border-gray-800' : 'bg-white border-gray-200 shadow-sm'}`}>
+                      <div className="flex-1 text-left">
+                        <div className="flex items-center gap-1.5 mb-1">
+                           <span className="text-[9px]">{item.veg ? '🟢' : '🔴'}</span>
+                           <h5 className="font-bold text-sm line-clamp-1">{item.name}</h5>
+                        </div>
+                        <p className="text-[10px] text-gray-500 mb-2 line-clamp-1">{item.prep}</p>
+                        <div className="text-lg font-bold" style={{ color: accentColor }}>₹{item.price}</div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                         <div className="w-16 h-16 bg-gray-800/50 rounded-xl flex items-center justify-center text-2xl overflow-hidden border border-gray-700/50">
+                           {item.imageUrl ? (
+                             <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                           ) : (
+                             <span>{item.emoji || '🍲'}</span>
+                           )}
+                         </div>
+                         <button type="button" className={`px-4 py-1 text-xs font-bold text-black shadow-sm ${buttonRoundness}`} style={{ backgroundColor: accentColor }}>
+                           ADD
+                         </button>
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                       <div className="w-16 h-16 bg-gray-800/50 rounded-xl flex items-center justify-center text-2xl">🍲</div>
-                       <button type="button" className={`px-4 py-1 text-xs font-bold text-black shadow-sm ${buttonRoundness}`} style={{ backgroundColor: accentColor }}>
-                         ADD
-                       </button>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 

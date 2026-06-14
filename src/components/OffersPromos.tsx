@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 
+// 🌟 UPDATED: Interface now expects 'applyTo' from the database
 interface Promo {
   id: string;
   code: string;
@@ -10,10 +11,12 @@ interface Promo {
   currentUses: number;
   expiresAt: string | null;
   isActive: boolean;
+  applyTo: string; 
 }
 
 export default function OffersPromos({ vendorId }: { vendorId: string }) {
   const [promos, setPromos] = useState<Promo[]>([]);
+  const [categories, setCategories] = useState<string[]>([]); // 🌟 NEW: Stores the dynamic categories
   const [isLoading, setIsLoading] = useState(true);
 
   // Form states matching database
@@ -22,24 +25,36 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
   const [discountValue, setDiscountValue] = useState('');
   const [minOrderValue, setMinOrderValue] = useState('0');
   const [expiresAt, setExpiresAt] = useState('');
+  const [applyTo, setApplyTo] = useState('ALL'); // 🌟 NEW: Default form state
 
-  // 1. Fetch Promos from Backend
-  const fetchPromos = async () => {
+  // 1. Fetch Promos AND Categories from Backend
+  const fetchData = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos`);
-      if (res.ok) {
-        const data = await res.json();
+      // Fetch existing promos
+      const promoRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos`);
+      if (promoRes.ok) {
+        const data = await promoRes.json();
         setPromos(data.promos || []);
       }
+
+      // 🌟 NEW: Silently fetch the menu to extract the vendor's actual categories
+      const menuRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/menu-editor`);
+      if (menuRes.ok) {
+        const menuData = await menuRes.json();
+        if (menuData.items) {
+          const uniqueCategories = Array.from(new Set(menuData.items.map((item: any) => item.category))) as string[];
+          setCategories(uniqueCategories);
+        }
+      }
     } catch (err) {
-      console.error("Failed to fetch promos", err);
+      console.error("Failed to fetch data", err);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchPromos();
+    if (vendorId) fetchData();
   }, [vendorId]);
 
   // 2. Create Promo
@@ -57,7 +72,8 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
           value: Number(discountValue),
           minOrderValue: Number(minOrderValue),
           expiresAt: expiresAt || null,
-          isActive: true
+          isActive: true,
+          applyTo: applyTo // 🌟 NEW: Send the category target to Postgres
         })
       });
       
@@ -67,7 +83,8 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
         setDiscountValue('');
         setMinOrderValue('0');
         setExpiresAt('');
-        fetchPromos();
+        setApplyTo('ALL');
+        fetchData();
       } else {
         alert("Failed to create. This code might already exist!");
       }
@@ -81,7 +98,7 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
     if (!window.confirm("Delete this promo code?")) return;
     try {
       await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos/${id}`, { method: 'DELETE' });
-      fetchPromos();
+      fetchData();
     } catch (err) {
       console.error("Failed to delete", err);
     }
@@ -96,7 +113,6 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
         <p className="text-xs text-gray-500">Create • Manage • Schedule</p>
       </div>
 
-      {/* Main Structural Control Layout Split Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-2">
         
         {/* Left Side: Active Offers Management List Panel */}
@@ -112,8 +128,15 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
               {promos.map(promo => (
                 <div 
                   key={promo.id} 
-                  className="bg-[#1A1D24] border border-[#2A2E39]/60 rounded-xl p-4 flex items-center justify-between gap-4"
+                  className="bg-[#1A1D24] border border-[#2A2E39]/60 rounded-xl p-4 flex items-center justify-between gap-4 relative overflow-hidden"
                 >
+                  {/* 🌟 NEW: Visual indicator if it only applies to a specific category */}
+                  {promo.applyTo !== 'ALL' && (
+                    <div className="absolute top-0 right-0 bg-[#E5B35C]/20 text-[#E5B35C] text-[9px] font-bold px-2 py-0.5 rounded-bl-lg">
+                      {promo.applyTo} ONLY
+                    </div>
+                  )}
+
                   <div>
                     <h4 className="text-sm font-bold text-blue-400 font-mono tracking-wide">{promo.code}</h4>
                     <p className="text-xs text-gray-400 mt-1">
@@ -122,7 +145,6 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
                     </p>
                   </div>
 
-                  {/* Clean Delete Button replacing Toggle */}
                   <button
                     onClick={() => handleDeleteOffer(promo.id)}
                     className="text-xs font-bold text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 px-3 py-1.5 rounded-lg transition-all shrink-0"
@@ -135,13 +157,12 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
           )}
         </div>
 
-        {/* Right Side: Create Offer Interactive Submission Form Engine */}
+        {/* Right Side: Create Offer Form */}
         <div className="lg:col-span-7 bg-[#13161F] border border-[#1F2330] rounded-xl p-6">
           <h3 className="text-[10px] text-gray-500 font-bold tracking-widest uppercase mb-5">Create New Offer</h3>
           
           <form onSubmit={handleCreateOffer} className="flex flex-col gap-4">
             
-            {/* Promo Code Entry */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-gray-400 font-medium">Promo Code</label>
               <input 
@@ -155,7 +176,6 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              {/* Type Selection */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs text-gray-400 font-medium">Discount type</label>
                 <select 
@@ -168,7 +188,6 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
                 </select>
               </div>
 
-              {/* Value Entry */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs text-gray-400 font-medium">Discount value</label>
                 <input 
@@ -183,7 +202,6 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              {/* Min Order Value */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs text-gray-400 font-medium">Min order value (₹)</label>
                 <input 
@@ -194,7 +212,6 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
                 />
               </div>
 
-              {/* Expiry Date */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs text-gray-400 font-medium">Expiry Date (Optional)</label>
                 <input 
@@ -206,10 +223,24 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
               </div>
             </div>
 
-            {/* Submit Mechanism Button Trigger */}
+            {/* 🌟 NEW: The dynamic Category Apply-To Dropdown */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-gray-400 font-medium">Apply to</label>
+              <select 
+                value={applyTo}
+                onChange={(e) => setApplyTo(e.target.value)}
+                className="bg-[#1A1D24] border border-[#2A2E39] rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-[#E5B35C] transition-all cursor-pointer appearance-none"
+              >
+                <option value="ALL">All items</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
             <button 
               type="submit"
-              className="w-full bg-[#E5B35C] text-[#0B0E14] font-bold py-2.5 rounded-lg text-sm hover:bg-[#d4a24b] transition-all mt-2 active:scale-[0.99]"
+              className="w-full bg-[#E5B35C] text-[#0B0E14] font-bold py-2.5 rounded-lg text-sm hover:bg-[#d4a24b] transition-all mt-4 active:scale-[0.99]"
             >
               Create & activate offer
             </button>

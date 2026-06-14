@@ -25,6 +25,9 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
   const [buttonRoundness, setButtonRoundness] = useState('rounded-xl');
   const [storeName, setStoreName] = useState('Your Store');
   
+  const [showOfferStrip, setShowOfferStrip] = useState(false);
+  const [offerText, setOfferText] = useState('⚡ Happy Hour 6-8 PM · 15% off all Chaat items');
+
   // Storage URLs
   const [logoUrl, setLogoUrl] = useState('');
   const [bannerUrl, setBannerUrl] = useState('');
@@ -58,6 +61,8 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
             setLogoUrl(data.branding.logoUrl || '');
             setBannerUrl(data.branding.bannerUrl || '');
             setStoreName(data.storeName || 'Your Store');
+            setShowOfferStrip(data.branding.showOfferStrip || false);
+            setOfferText(data.branding.offerText || '⚡ Happy Hour 6-8 PM · 15% off all items');
           }
         }
 
@@ -129,7 +134,7 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          themeMode, accentColor, fontFamily, buttonRoundness, logoUrl, bannerUrl
+          themeMode, accentColor, fontFamily, buttonRoundness, logoUrl, bannerUrl, showOfferStrip, offerText
         })
       });
       if (res.ok) toast.success("Branding updated successfully!");
@@ -160,6 +165,30 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
             <button type="button" onClick={() => setThemeMode('light')} className={`py-3 rounded-xl font-bold text-sm transition-all border ${themeMode === 'light' ? 'bg-white border-gray-300 text-black shadow-md' : 'bg-[#0B0E14] border-gray-800 text-gray-400 hover:text-white'}`}>Light Mode</button>
           </div>
         </div>
+
+        {/* OFFER STRIP SETTINGS */}
+        <div className="pt-4 border-t border-[#1F2330]">
+          <h3 className="text-xs font-bold text-[#E5B35C] uppercase tracking-wider mb-4">Offer Strip</h3>
+          
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-sm font-medium text-gray-300">Show strip</span>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" checked={showOfferStrip} onChange={(e) => setShowOfferStrip(e.target.checked)} className="sr-only peer" />
+              <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+            </label>
+          </div>
+
+          <div className={`transition-all duration-300 ${showOfferStrip ? 'opacity-100 h-auto' : 'opacity-50 pointer-events-none'}`}>
+            <input 
+              type="text" 
+              value={offerText} 
+              onChange={(e) => setOfferText(e.target.value)} 
+              placeholder="e.g. ⚡ Happy Hour 6-8 PM" 
+              className="w-full bg-[#130B07] border border-[#3E291C] rounded-xl p-3 text-white outline-none focus:border-[#E5B35C] text-sm" 
+            />
+          </div>
+        </div>
+
 
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Brand Accent Color</label>
@@ -279,6 +308,16 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
 
             <div className="mt-10 px-6 pb-6 flex-1 flex flex-col">
               <h4 className="text-2xl font-bold tracking-tight text-center">{storeName}</h4>
+              
+              {/* LIVE OFFER STRIP PREVIEW */}
+              {showOfferStrip && (
+                <div 
+                  className="mt-4 py-2 px-4 w-full text-center text-xs font-bold shadow-md flex items-center justify-center gap-2"
+                  style={{ backgroundColor: accentColor, color: '#000' }}
+                >
+                  {offerText || 'Your offer text here'}
+                </div>
+              )}
               
               <div className="flex overflow-x-auto justify-center gap-2 mt-6 pb-2 no-scrollbar">
                 <span className="px-5 py-1.5 rounded-full text-sm font-bold" style={{ backgroundColor: accentColor, color: '#000' }}>All</span>

@@ -3,7 +3,6 @@ import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase'; 
 import { useAuth } from '@clerk/clerk-react'; 
 
-// 🌟 Expanded type architecture to capture all analytics and custom fields from your screenshot
 type MenuItem = {
   id: string;
   name: string;
@@ -25,17 +24,21 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Form State for new items
+  // Form State for basic item details
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Food');
   const [price, setPrice] = useState('');
   const [prep, setPrep] = useState('10 min');
   const [veg, setVeg] = useState(true);
+
+  // 🌟 NEW: Form State for expanded configuration fields
+  const [description, setDescription] = useState('');
+  const [costPrice, setCostPrice] = useState('');
+  const [remarks, setRemarks] = useState('');
+  const [emoji, setEmoji] = useState('');
+  const [badgeLabel, setBadgeLabel] = useState('');
   
-  // 🌟 State Engine for handling active edits
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
-  
-  // Image Upload State
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
@@ -74,7 +77,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
     setImageFile(file);
   };
 
-  // Create Handler
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -102,15 +104,31 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` 
         },
+        // 🌟 NEW: Inject expanded fields into the creation payload
         body: JSON.stringify({ 
-          name, category, price: Number(price), prep, veg, available: true, imageUrl: finalImageUrl 
+          name, 
+          category, 
+          price: Number(price), 
+          prep, 
+          veg, 
+          available: true, 
+          imageUrl: finalImageUrl,
+          description: description || null,
+          costPrice: costPrice ? Number(costPrice) : null,
+          remarks: remarks || null,
+          emoji: emoji || null,
+          badgeLabel: badgeLabel || null
         }),
       });
 
       if (res.ok) {
         toast.success("Item added to menu!");
         fetchMenu(); 
+        
+        // 🌟 NEW: Wipe all state fields clean after successful save
         setName(''); setPrice(''); setPrep('10 min'); setImageFile(null);
+        setDescription(''); setCostPrice(''); setRemarks(''); setEmoji(''); setBadgeLabel('');
+        
         const fileInput = document.getElementById('image-upload') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
       } else {
@@ -124,7 +142,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
     }
   };
 
-  // 🌟 Update Handler for existing items (Sends full data structure to backend)
   const handleUpdateItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
@@ -133,7 +150,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
     try {
       let finalImageUrl = editingItem.imageUrl;
 
-      // Handle structural image swapping if a new file was attached during edit context
       if (imageFile) {
         setIsUploadingImage(true);
         const fileExt = imageFile.name.split('.').pop();
@@ -150,7 +166,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
 
       const token = await getToken();
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${editingItem.id}`, {
-        method: 'PATCH', // Using standard PUT to synchronize entire item resource snapshot
+        method: 'PATCH', 
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -212,7 +228,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
       if (res.ok) {
         toast.success("Item deleted");
         setItems(items.filter(item => item.id !== itemId));
-        setEditingItem(null); // Close drawer if deleted inside editing scope
+        setEditingItem(null); 
       }
     } catch (error) {
       toast.error("Failed to delete item");
@@ -231,11 +247,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
       {/* --- ADD ITEM FORM --- */}
       <form onSubmit={handleAddItem} className="bg-[#13161F] border border-[#1F2330] rounded-2xl p-6 shadow-xl mb-8">
         <h3 className="text-lg font-bold text-gray-200 mb-4">Add New Item</h3>
-        <div className="mb-4">
-          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Item Photo (Optional)</label>
-          <input id="image-upload" type="file" accept="image/*" onChange={handleFileChange} className="w-full bg-[#0B0E14] border border-gray-700 text-gray-400 rounded-lg p-2 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#E5B35C] file:text-[#0B0E14] hover:file:bg-[#d4a24b] cursor-pointer" />
-        </div>
-
+        
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
           <div className="md:col-span-2">
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Item Name</label>
@@ -266,8 +278,40 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
             </select>
           </div>
         </div>
-        <div className="flex justify-end">
-          <button type="submit" disabled={isSaving || isUploadingImage} className="bg-[#E5B35C] text-[#0B0E14] font-bold py-2 px-6 rounded-lg text-sm hover:bg-[#d4a24b] transition-all disabled:opacity-50">
+
+        {/* 🌟 NEW: Expanded Creation Fields UI */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Description</label>
+            <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Rich buttery bhaji with soft pavs" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Cost Price (₹)</label>
+            <input type="number" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} placeholder="e.g. 28" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Emoji</label>
+            <input type="text" value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder="🍛" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Remarks</label>
+            <input type="text" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Regular spicy, Less spicy" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Badge Label</label>
+            <input type="text" value={badgeLabel} onChange={(e) => setBadgeLabel(e.target.value)} placeholder="e.g. Best Seller" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between border-t border-[#1F2330] pt-4">
+          <div className="w-full md:w-1/2">
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Item Photo (Optional)</label>
+            <input id="image-upload" type="file" accept="image/*" onChange={handleFileChange} className="w-full bg-[#0B0E14] border border-gray-700 text-gray-400 rounded-lg p-2 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#E5B35C] file:text-[#0B0E14] hover:file:bg-[#d4a24b] cursor-pointer" />
+          </div>
+          <button type="submit" disabled={isSaving || isUploadingImage} className="w-full md:w-auto bg-[#E5B35C] text-[#0B0E14] font-bold py-3 px-8 rounded-lg text-sm hover:bg-[#d4a24b] transition-all disabled:opacity-50 mt-4 md:mt-6">
             {isUploadingImage ? 'Uploading...' : isSaving ? 'Saving...' : '+ Add Item'}
           </button>
         </div>
@@ -314,7 +358,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                     </button>
                   </td>
                   <td className="p-4 text-right flex justify-end gap-3 items-center">
-                    {/* 🌟 EDIT BUTTON ACTION ATTACHED HERE */}
                     <button onClick={() => setEditingItem(item)} className="text-sm text-[#E5B35C] hover:underline font-medium">
                       Edit
                     </button>
@@ -329,20 +372,16 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
         </table>
       </div>
 
-      {/* ========================================================= */}
-      {/* 🌟 EDIT MODAL DIALOG MODULATED DIRECTLY FROM SCREENSHOT SPEC */}
-      {/* ========================================================= */}
+      {/* --- EDIT MODAL --- */}
       {editingItem && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-[#1C120C] border border-[#2F2117] text-gray-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative animate-scale-up">
             
-            {/* Header Track */}
             <div className="p-5 border-b border-[#2F2117] flex justify-between items-center bg-[#150D09]">
               <h3 className="text-xl font-serif text-white font-bold">Edit: {editingItem.name}</h3>
               <button onClick={() => setEditingItem(null)} className="text-gray-400 hover:text-white text-xl font-bold w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5">×</button>
             </div>
 
-            {/* Form Fields Body */}
             <form onSubmit={handleUpdateItem} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto no-scrollbar">
               
               <div>
@@ -399,7 +438,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                 <input type="text" value={editingItem.badgeLabel || ''} onChange={(e) => setEditingItem({ ...editingItem, badgeLabel: e.target.value })} placeholder="e.g. Best Seller" className="w-full bg-[#130B07] border border-[#3E291C] rounded-xl p-3 text-white outline-none focus:border-[#E5B35C] text-sm" />
               </div>
 
-              {/* Toggle Field Track */}
               <div className="flex items-center justify-between pt-2 border-t border-[#2F2117]">
                 <span className="text-sm font-medium text-gray-300">Active / visible</span>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -408,7 +446,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                 </label>
               </div>
 
-              {/* Form Actions Footer */}
               <div className="flex justify-between gap-4 pt-4">
                 <button type="submit" disabled={isSaving || isUploadingImage} className="flex-1 bg-red-700 text-white font-bold py-3 rounded-xl hover:bg-red-600 transition-colors text-sm shadow-md disabled:opacity-50">
                   {isUploadingImage ? 'Uploading Image...' : isSaving ? 'Saving...' : 'Save'}

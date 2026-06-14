@@ -19,8 +19,11 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
   const [bannerUrl, setBannerUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
+  // 🌟 NEW: Viewport Engine State
+  const [deviceView, setDeviceView] = useState<'mobile' | 'tablet' | 'desktop'>('mobile');
+
   const { getToken } = useAuth();
-  const API_URL = import.meta.env.VITE_API_URL;
+  const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend.onrender.com';
 
   useEffect(() => {
     async function loadBranding() {
@@ -50,7 +53,6 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
     if (vendorId) loadBranding();
   }, [vendorId]);
 
-  // Automated Supabase Upload Processor
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'logo' | 'banner') => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -59,7 +61,6 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
       return;
     }
 
-    // 1. INSTANT UI UPDATE: Create a temporary local URL so the preview updates immediately
     const instantLocalUrl = URL.createObjectURL(file);
     if (target === 'logo') setLogoUrl(instantLocalUrl);
     if (target === 'banner') setBannerUrl(instantLocalUrl);
@@ -69,20 +70,17 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
       const fileExt = file.name.split('.').pop();
       const fileName = `${vendorId}-${target}-${Date.now()}.${fileExt}`;
       
-      // 2. BACKGROUND UPLOAD: Send to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('vendor-assets')
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
-      // 3. REPLACE LOCAL URL: Swap the fake URL for the permanent Supabase URL
       const { data } = supabase.storage.from('vendor-assets').getPublicUrl(fileName);
       
       if (target === 'logo') setLogoUrl(data.publicUrl);
       if (target === 'banner') setBannerUrl(data.publicUrl);
       
-      // 4. INSTRUCT THE VENDOR: Warn them they must save the database
       toast.success(`${target === 'logo' ? 'Logo' : 'Banner'} uploaded! Click 'Save Branding' to lock it in.`);
     } catch (err) {
       console.error("Upload pipeline failed:", err);
@@ -118,16 +116,15 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
   if (isLoading) return <div className="p-8 text-gray-500 animate-pulse">Loading engine configurations...</div>;
 
   return (
-    <div className="p-8 max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 font-sans">
+    <div className="p-8 max-w-[1600px] mx-auto grid grid-cols-1 xl:grid-cols-12 gap-8 font-sans">
       
       {/* LEFT COLUMN: CONTROL SUITE */}
-      <div className="lg:col-span-7 bg-[#13161F] border border-[#1F2330] rounded-2xl p-6 shadow-xl space-y-6">
+      <div className="xl:col-span-4 bg-[#13161F] border border-[#1F2330] rounded-2xl p-6 shadow-xl space-y-6 h-fit">
         <div>
           <h2 className="text-2xl font-serif text-[#E5B35C] font-bold">Branding Studio</h2>
           <p className="text-xs text-gray-400 mt-1">Customize how your digital menu appears to customers.</p>
         </div>
 
-        {/* Theme Mode Option */}
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Theme Mode</label>
           <div className="grid grid-cols-2 gap-4">
@@ -136,7 +133,6 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
           </div>
         </div>
 
-        {/* Brand Accent Selection */}
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Brand Accent Color</label>
           <div className="flex gap-3 items-center">
@@ -145,7 +141,6 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
           </div>
         </div>
 
-        {/* Font Family Curated Matrix */}
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Typography Font Pair</label>
           <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-xl p-3 text-sm focus:border-[#E5B35C] focus:outline-none">
@@ -155,98 +150,138 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
           </select>
         </div>
 
-        {/* Button Style Configurations */}
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Button Edge Profile</label>
           <div className="grid grid-cols-3 gap-2">
             {[
               { id: 'rounded-none', label: 'Sharp' },
-              { id: 'rounded-xl', label: 'Soft Rounded' },
-              { id: 'rounded-full', label: 'Pill Shape' }
+              { id: 'rounded-xl', label: 'Soft' },
+              { id: 'rounded-full', label: 'Pill' }
             ].map(shape => (
-              <button key={shape.id} type="button" onClick={() => setButtonRoundness(shape.id)} className={`py-2 px-3 rounded-lg text-xs font-bold transition-all border ${buttonRoundness === shape.id ? 'bg-[#E5B35C] text-black border-[#E5B35C]' : 'bg-[#0B0E14] border-gray-800 text-gray-400'}`}>{shape.label}</button>
+              <button key={shape.id} type="button" onClick={() => setButtonRoundness(shape.id)} className={`py-2 px-2 rounded-lg text-xs font-bold transition-all border ${buttonRoundness === shape.id ? 'bg-[#E5B35C] text-black border-[#E5B35C]' : 'bg-[#0B0E14] border-gray-800 text-gray-400'}`}>{shape.label}</button>
             ))}
           </div>
         </div>
 
-        {/* Automated Drag/Pick Upload Triggers */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Logo Avatar Icon</label>
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Logo Avatar</label>
             <div className="border border-dashed border-[#1F2330] bg-[#0B0E14] rounded-xl p-4 text-center cursor-pointer relative hover:border-gray-600 transition-colors">
               <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'logo')} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" disabled={isUploading} />
-              <p className="text-xs text-gray-400">📷 {logoUrl ? 'Change Logo Icon' : 'Upload Logo Avatar'}</p>
+              <p className="text-xs text-gray-400">📷 {logoUrl ? 'Change' : 'Upload'}</p>
             </div>
           </div>
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Banner Header Photo</label>
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Banner Photo</label>
             <div className="border border-dashed border-[#1F2330] bg-[#0B0E14] rounded-xl p-4 text-center cursor-pointer relative hover:border-gray-600 transition-colors">
               <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'banner')} className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" disabled={isUploading} />
-              <p className="text-xs text-gray-400">🖼️ {bannerUrl ? 'Change Banner' : 'Upload Banner Image'}</p>
+              <p className="text-xs text-gray-400">🖼️ {bannerUrl ? 'Change' : 'Upload'}</p>
             </div>
           </div>
         </div>
 
-        {/* Global Save Action */}
         <div className="pt-4 border-t border-[#1F2330] flex justify-end">
-          <button type="button" onClick={handleSaveBranding} disabled={isSaving || isUploading} className="bg-[#E5B35C] text-[#0B0E14] font-bold py-2.5 px-6 rounded-xl text-sm hover:bg-[#d4a24b] transition-all shadow-md disabled:opacity-50">
+          <button type="button" onClick={handleSaveBranding} disabled={isSaving || isUploading} className="w-full bg-[#E5B35C] text-[#0B0E14] font-bold py-3 px-6 rounded-xl text-sm hover:bg-[#d4a24b] transition-all shadow-md disabled:opacity-50">
             {isSaving ? 'Synchronizing Customizations...' : 'Save Branding'}
           </button>
         </div>
       </div>
 
-      {/* RIGHT COLUMN: REACTIVE MOBILE PREVIEW SCOPE */}
-      <div className="lg:col-span-5 flex flex-col items-center">
-        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Customer Mobile Preview</span>
+      {/* RIGHT COLUMN: REACTIVE DEVICE PREVIEW SCOPE */}
+      <div className="xl:col-span-8 flex flex-col items-center border border-[#1F2330] bg-[#0B0E14] p-8 rounded-2xl overflow-hidden relative min-h-[800px]">
         
-        {/* Outer Phone Blueprint Frame */}
-        <div className="w-full max-w-[320px] aspect-[9/18] bg-[#000000] rounded-[40px] p-3 shadow-2xl border-4 border-gray-800 ring-4 ring-gray-900 flex flex-col overflow-hidden">
+        {/* Device Viewport Toggle */}
+        <div className="flex bg-[#13161F] border border-[#1F2330] rounded-lg p-1 mb-6 shadow-xl w-full max-w-sm z-10 relative">
+          <button 
+            onClick={() => setDeviceView('mobile')}
+            className={`flex-1 py-2 text-sm font-bold rounded-md transition-all flex items-center justify-center gap-2 ${deviceView === 'mobile' ? 'bg-[#E5B35C] text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+          >
+            📱 Mobile
+          </button>
+          <button 
+            onClick={() => setDeviceView('tablet')}
+            className={`flex-1 py-2 text-sm font-bold rounded-md transition-all flex items-center justify-center gap-2 ${deviceView === 'tablet' ? 'bg-[#E5B35C] text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+          >
+            📟 Tablet
+          </button>
+          <button 
+            onClick={() => setDeviceView('desktop')}
+            className={`flex-1 py-2 text-sm font-bold rounded-md transition-all flex items-center justify-center gap-2 ${deviceView === 'desktop' ? 'bg-[#E5B35C] text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+          >
+            💻 Desktop
+          </button>
+        </div>
+
+        {/* Viewport Dimension Indicator */}
+        <div className="w-full text-center mb-6 text-gray-500 font-mono text-xs z-10 relative">
+           <span>{deviceView === 'mobile' ? '📱 Mobile Viewpoint — 390px' : deviceView === 'tablet' ? '📟 Tablet Viewpoint — 768px' : '💻 Desktop Viewpoint — 1024px'}</span>
+        </div>
+
+        {/* The Dynamic Canvas Frame */}
+        <div 
+          className={`transition-all duration-500 ease-in-out border-[8px] border-[#1F2330] rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col absolute top-32 ${
+            deviceView === 'mobile' ? 'w-[390px] h-[800px]' : 
+            deviceView === 'tablet' ? 'w-[768px] h-[800px]' : 
+            'w-[1024px] h-[800px]' 
+          }`}
+          style={{ 
+            transformOrigin: 'top center', 
+            transform: deviceView === 'desktop' ? 'scale(0.75)' : deviceView === 'tablet' ? 'scale(0.85)' : 'scale(1)' 
+          }} 
+        >
           
-          {/* Inner Webview Viewport Frame */}
-          <div className={`flex-1 rounded-[32px] overflow-hidden flex flex-col relative transition-all ${themeMode === 'dark' ? 'bg-[#0B0E14] text-white' : 'bg-gray-50 text-gray-900'} ${fontFamily}`}>
+          {/* Inner Webview Content (Visual Dummy matching your brand) */}
+          <div className={`flex-1 overflow-y-auto no-scrollbar flex flex-col relative transition-colors duration-300 ${themeMode === 'dark' ? 'bg-[#0B0E14] text-white' : 'bg-gray-50 text-gray-900'} ${fontFamily}`}>
             
-            {/* Banner Segment Canvas */}
-            <div className="h-28 bg-gray-800 relative w-full overflow-hidden border-b border-black/20">
+            <div className={`relative w-full overflow-hidden border-b border-black/20 shrink-0 ${deviceView === 'mobile' ? 'h-32' : 'h-48'}`}>
               {bannerUrl ? (
                 <img src={bannerUrl} alt="Banner Preview" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center text-[10px] text-gray-600 font-mono">No Banner Img Context</div>
+                <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex flex-col items-center justify-center text-white font-bold p-4 text-center">
+                   <span className="text-sm opacity-50">No Banner Image</span>
+                </div>
               )}
               
-              {/* Overlapping Absolute Logo Element */}
-              <div className="absolute -bottom-6 left-6 w-14 h-14 rounded-full bg-gray-700 border-2 border-[#0B0E14] overflow-hidden shadow-md flex items-center justify-center">
+              <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full ${themeMode === 'dark' ? 'bg-[#13161F]' : 'bg-white'} border-4 ${themeMode === 'dark' ? 'border-[#0B0E14]' : 'border-gray-50'} overflow-hidden shadow-md flex items-center justify-center`}>
                 {logoUrl ? (
                   <img src={logoUrl} alt="Logo Preview" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-[10px] text-gray-400">Avatar</span>
+                  <span className="text-2xl">🍲</span>
                 )}
               </div>
             </div>
 
-            {/* Core Content Body Text Elements */}
-            <div className="mt-8 px-6 flex-1 space-y-4">
-              <div>
-                <h4 className="text-lg font-bold tracking-tight">{storeName}</h4>
-                <p className="text-[10px] text-gray-500 font-medium">QR Digital Menu</p>
+            <div className="mt-10 px-6 pb-6 flex-1 flex flex-col">
+              <h4 className="text-2xl font-bold tracking-tight text-center">{storeName}</h4>
+              
+              {/* Category Bar Mockup */}
+              <div className="flex overflow-x-auto justify-center gap-2 mt-6 pb-2 no-scrollbar">
+                <span className="px-5 py-1.5 rounded-full text-sm font-bold" style={{ backgroundColor: accentColor, color: '#000' }}>All</span>
+                <span className={`px-5 py-1.5 rounded-full text-sm font-medium border ${themeMode === 'dark' ? 'border-gray-700 text-gray-400' : 'border-gray-300 text-gray-600'}`}>Food</span>
+                <span className={`px-5 py-1.5 rounded-full text-sm font-medium border ${themeMode === 'dark' ? 'border-gray-700 text-gray-400' : 'border-gray-300 text-gray-600'}`}>Drinks</span>
               </div>
 
-              {/* Dynamic Action Button Render Hook */}
-              <div className="pt-2">
-                <button type="button" className={`w-full py-3 text-center text-xs font-bold text-white shadow-lg transition-transform hover:scale-[0.98] ${buttonRoundness}`} style={{ backgroundColor: accentColor }}>
-                  View Menu Items
-                </button>
-              </div>
-              
-              {/* Dummy Item Wireframe list */}
-              <div className="pt-2 space-y-2 opacity-40">
-                <div className={`p-3 rounded-xl flex justify-between items-center ${themeMode === 'dark' ? 'bg-[#13161F]' : 'bg-white shadow-sm'}`}>
-                  <div className="h-3 w-20 bg-gray-600 rounded"></div>
-                  <div className="h-3 w-8 bg-[#E5B35C] rounded"></div>
-                </div>
-                <div className={`p-3 rounded-xl flex justify-between items-center ${themeMode === 'dark' ? 'bg-[#13161F]' : 'bg-white shadow-sm'}`}>
-                  <div className="h-3 w-16 bg-gray-600 rounded"></div>
-                  <div className="h-3 w-8 bg-[#E5B35C] rounded"></div>
-                </div>
+              {/* Responsive Grid based on Device View */}
+              <div className={`w-full mt-6 grid gap-4 ${
+                deviceView === 'mobile' ? 'grid-cols-1' : 
+                deviceView === 'tablet' ? 'grid-cols-2' : 
+                'grid-cols-3'
+              }`}>
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className={`p-4 rounded-2xl flex gap-4 items-center border ${themeMode === 'dark' ? 'bg-[#13161F] border-gray-800' : 'bg-white border-gray-200 shadow-sm'}`}>
+                    <div className="flex-1">
+                      <div className="h-4 w-24 bg-gray-600/50 rounded mb-2"></div>
+                      <div className="h-3 w-16 bg-gray-600/30 rounded mb-4"></div>
+                      <div className="h-5 w-12 rounded font-bold" style={{ color: accentColor }}>₹150</div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                       <div className="w-16 h-16 bg-gray-800/50 rounded-xl flex items-center justify-center text-2xl">🍲</div>
+                       <button type="button" className={`px-4 py-1 text-xs font-bold text-black shadow-sm ${buttonRoundness}`} style={{ backgroundColor: accentColor }}>
+                         ADD
+                       </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 

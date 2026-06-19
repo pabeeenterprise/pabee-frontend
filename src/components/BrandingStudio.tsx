@@ -40,7 +40,7 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
   const [previewItems, setPreviewItems] = useState<PreviewItem[]>([]);
 
   const { getToken } = useAuth();
-  const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend.onrender.com';
+  const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
 
   useEffect(() => {
     async function loadBrandingAndMenu() {

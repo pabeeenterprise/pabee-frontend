@@ -23,7 +23,7 @@ export default function Checkout({ vendorId, onBack }: { vendorId: string, onBac
   // Vendor Payment Data
   const [vendorPayment, setVendorPayment] = useState<{available: boolean, upiId?: string, qrImagePath?: string} | null>(null);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend.onrender.com';
+  const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
   
   const subtotal = cart.reduce((sum, cartItem) => sum + (cartItem.price * cartItem.qty), 0);
   const finalTotal = Math.max(0, subtotal - discountAmount);

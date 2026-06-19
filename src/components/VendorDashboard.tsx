@@ -20,7 +20,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
   useEffect(() => {
     if (userId) {
       // Ask the backend: "What is the Prisma database ID for this Google user?"
-      fetch(`https://pabee-backend.onrender.com/api/vendors/${userId}/profile`)
+      fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${userId}/profile`)
         .then(res => {
           if (!res.ok) throw new Error("Profile not found");
           return res.json();

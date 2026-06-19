@@ -36,7 +36,7 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   useEffect(() => {
     const fetchData = async () => {
         try {
-          const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend.onrender.com';
+          const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
           const profileRes = await fetch(`${API_URL}/api/vendors/${vendorId}/profile`);
           
           if (!profileRes.ok) {

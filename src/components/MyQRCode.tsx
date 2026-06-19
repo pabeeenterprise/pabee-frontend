@@ -12,7 +12,7 @@ export default function MyQRCode({ vendorId }: { vendorId: string }) {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch(`https://pabee-backend.onrender.com/api/vendors/${vendorId}/profile`);
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/profile`);
         if (res.ok) {
           const data = await res.json();
           setVendorName(data.name);

@@ -73,7 +73,7 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
         if (menuRes.ok) {
           const menuData = await menuRes.json();
           // Debug Trap: Prints exactly what the database handed over
-          console.log("🚨 BRANDING STUDIO MENU FETCH:", menuData); 
+          //console.log("🚨 BRANDING STUDIO MENU FETCH:", menuData); 
           setPreviewItems(menuData.items && Array.isArray(menuData.items) ? menuData.items.slice(0, 6) : []);
         }
 

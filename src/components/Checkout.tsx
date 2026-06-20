@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useCart } from '../context/CartContext';
 
-export default function Checkout({ vendorId, onBack }: { vendorId: string, onBack: () => void }) {
-  const { cart, clearCart } = useCart();
+export default function Checkout({ vendorId, tableId, onBack }: { vendorId: string; tableId: string; onBack: () => void }) {
+ const { cart, clearCart } = useCart();
   
   // Basic Info
-  const [tableId, setTableId] = useState('');
+  const [localTableId, setLocalTableId] = useState(tableId);
   const [phone, setPhone] = useState('');
   const [paymentMode, setPaymentMode] = useState('UPI');
   
@@ -70,7 +70,7 @@ export default function Checkout({ vendorId, onBack }: { vendorId: string, onBac
   // 🛡️ Move to the payment/confirmation step (No OTP)
   const handleProceedToPayment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tableId || phone.length < 10) {
+    if (!localTableId || phone.length < 10) {
       toast.error("Please enter a valid Table Number and 10-digit Phone Number");
       return;
     }
@@ -83,7 +83,7 @@ export default function Checkout({ vendorId, onBack }: { vendorId: string, onBac
     try {
       const orderPayload = {
         vendorId,
-        tableId,
+        tableId: localTableId, // 👈 Send the local state to the database,
         customerPhone: phone,
         paymentMode,
         total: finalTotal,
@@ -185,7 +185,7 @@ export default function Checkout({ vendorId, onBack }: { vendorId: string, onBac
             <form onSubmit={handleProceedToPayment} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">Table Number</label>
-                <input type="text" required placeholder="e.g. Table 4" value={tableId} onChange={(e) => setTableId(e.target.value)} className="w-full bg-[#0B0E14] border border-gray-800 rounded-xl p-3 text-white outline-none focus:border-[#E5B35C]" />
+                <input type="text" required placeholder="e.g. Table 4" value={localTableId} onChange={(e) => setLocalTableId(e.target.value)} className="w-full bg-[#0B0E14] border border-gray-800 rounded-xl p-3 text-white outline-none focus:border-[#E5B35C]" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">Phone Number</label>

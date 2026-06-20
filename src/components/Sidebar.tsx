@@ -1,3 +1,6 @@
+import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/clerk-react';
+
 // Defining our navigation links outside the component keeps the code clean
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: '📊' },
@@ -18,6 +21,28 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
+  const { userId, getToken } = useAuth();
+  const [vendorData, setVendorData] = useState<{ name?: string; address?: string; tier?: number } | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    const fetchVendor = async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${userId}/profile`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setVendorData(data);
+        }
+      } catch (err) {
+        console.error("Sidebar: failed to fetch vendor profile", err);
+      }
+    };
+    fetchVendor();
+  }, [userId, getToken]);
+
   return (
     <div className="w-64 bg-[#0F111A] border-r border-[#1F2330] h-screen flex flex-col shrink-0">
       
@@ -26,16 +51,16 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
         <div className="flex items-center gap-3 mb-8">
           <h1 className="text-[#E5B35C] font-serif text-2xl font-bold tracking-wide">pabee</h1>
           <span className="text-[9px] uppercase tracking-widest text-[#E5B35C] border border-[#E5B35C]/30 px-2 py-0.5 rounded-full">
-            Tier 1 Street Food
+            Tier {vendorData?.tier || 1} Street Food
           </span>
         </div>
         
         {/* Vendor Specific Info */}
         <div className="border-b border-[#1F2330] pb-6">
           <h2 className="text-gray-200 font-bold flex items-center gap-2 text-sm">
-            <span>🍲</span> Spice Street Chaat
+            <span>🍲</span> {vendorData?.name || 'Unnamed Store'}
           </h2>
-          <p className="text-[11px] text-gray-500 mt-1 font-medium">Kothrud, Pune • Tier 1</p>
+          <p className="text-[11px] text-gray-500 mt-1 font-medium">{vendorData?.address || 'No location set'} • Tier {vendorData?.tier || 1}</p>
         </div>
       </div>
 

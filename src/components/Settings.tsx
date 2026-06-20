@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { useUser } from '@clerk/clerk-react';
+import { useUser, useAuth } from '@clerk/clerk-react';
 
 export default function Settings({ vendorId }: { vendorId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const { getToken } = useAuth(); 
   const { user } = useUser();
   const accountEmail = user?.primaryEmailAddress?.emailAddress || '';
   
@@ -25,7 +26,12 @@ export default function Settings({ vendorId }: { vendorId: string }) {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/profile`);
+        const token = await getToken(); // 👈 Generate the secure wristband
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/profile`, {
+          headers: {
+            'Authorization': `Bearer ${token}` // 👈 Show it to the server
+          }
+        });        
         if (response.ok) {
           const data = await response.json();
           setName(data.name || '');
@@ -100,9 +106,11 @@ export default function Settings({ vendorId }: { vendorId: string }) {
     setIsSaving(true);
 
     try {
+      const token = await getToken(); // 👈 Generate the secure wristband
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/profile`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },// 👈 Show it to the server },
+        
         // 🌟 NEW: Include the dashboardLogoUrl in the payload
         body: JSON.stringify({ name, businessType, useLogoAsHeader, logoUrl, dashboardLogoUrl }),
       });

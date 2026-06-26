@@ -2,29 +2,30 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useCart } from '../context/CartContext';
 
+// 🌟 Tell TypeScript that the Razorpay script will be injected into the browser window
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
 export default function Checkout({ vendorId, tableId, onBack }: { vendorId: string; tableId: string; onBack: () => void }) {
- const { cart, clearCart } = useCart();
-  
-  // Basic Info
+  const { cart, clearCart } = useCart();
   const [localTableId, setLocalTableId] = useState(tableId);
   const [phone, setPhone] = useState('');
-  const [paymentMode, setPaymentMode] = useState('UPI');
   
-  // Promo State
+  const [paymentMode, setPaymentMode] = useState('UPI'); 
   const [promoCode, setPromoCode] = useState('');
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isPromoApplied, setIsPromoApplied] = useState(false);
-  
-  // UI Flow State
   const [step, setStep] = useState<'details' | 'payment'>('details');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
 
-  // Vendor Payment Data
-  const [vendorPayment, setVendorPayment] = useState<{available: boolean, upiId?: string, qrImagePath?: string} | null>(null);
+  // 🌟 NEW: Expanded payment data type
+  const [vendorPayment, setVendorPayment] = useState<{available: boolean, paymentType?: string, upiId?: string, qrImagePath?: string, razorpayKeyId?: string} | null>(null);
 
   const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
-  
   const subtotal = cart.reduce((sum, cartItem) => sum + (cartItem.price * cartItem.qty), 0);
   const finalTotal = Math.max(0, subtotal - discountAmount);
 
@@ -35,7 +36,11 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
         if (res.ok) {
           const data = await res.json();
           setVendorPayment(data);
+          
+          // Auto-select the correct dropdown based on database config
           if (!data.available) setPaymentMode('CASH');
+          else if (data.paymentType === 'RAZORPAY') setPaymentMode('RAZORPAY');
+          else setPaymentMode('UPI');
         }
       } catch (error) {
         console.error("Could not load vendor payment data");
@@ -50,7 +55,7 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/promos/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: promoCode, cartTotal: subtotal })
+        body: JSON.stringify({ code: promoCode, cartItems: cart })
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -59,15 +64,12 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
         toast.success(`Promo applied! You saved ₹${data.discountAmount}`);
       } else {
         toast.error(data.error || "Invalid promo code");
-        setDiscountAmount(0);
-        setIsPromoApplied(false);
       }
     } catch (err) {
       toast.error("Failed to verify promo");
     }
   };
 
-  // 🛡️ Move to the payment/confirmation step (No OTP)
   const handleProceedToPayment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!localTableId || phone.length < 10) {
@@ -77,21 +79,27 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
     setStep('payment');
   };
 
-  // 🛡️ Submit the order directly to the database
-  const handlePlaceOrder = async () => {
-    setIsSubmitting(true);
+  // 🌟 NEW: Dynamically inject the Razorpay SDK into the browser
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
+  // 🌟 NEW: The function that saves the food order to Prisma AFTER payment succeeds
+  const saveFinalOrderToDatabase = async (finalPaymentMode: string) => {
     try {
       const orderPayload = {
         vendorId,
-        tableId: localTableId, // 👈 Send the local state to the database,
+        tableId: localTableId,
         customerPhone: phone,
-        paymentMode,
+        paymentMode: finalPaymentMode,
         total: finalTotal,
-        items: cart.map(c => ({
-          name: c.name,
-          qty: c.qty,
-          price: c.price
-        }))
+        items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price }))
       };
 
       const orderRes = await fetch(`${API_URL}/api/orders`, {
@@ -113,6 +121,61 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
     }
   };
 
+  // 🌟 NEW: The Master Checkout Handler
+  const handlePlaceOrder = async () => {
+    setIsSubmitting(true);
+    
+    // PATH 1: RAZORPAY GATEWAY
+    if (paymentMode === 'RAZORPAY') {
+      try {
+        const isLoaded = await loadRazorpayScript();
+        if (!isLoaded) throw new Error("Razorpay failed to load. Check your connection.");
+
+        // Ask Backend to Create an Order
+        const orderRes = await fetch(`${API_URL}/api/checkout/razorpay`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vendorId, amount: finalTotal })
+        });
+        const orderData = await orderRes.json();
+        
+        if (orderData.error) throw new Error(orderData.error);
+
+        // Open the Razorpay Modal
+        const options = {
+          key: vendorPayment?.razorpayKeyId, // The public key from our patch
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: "Your Order",
+          description: `Table ${localTableId}`,
+          order_id: orderData.id,
+          handler: async function () {
+            // SUCCESS! They paid. Now save the food order.
+            toast.success("Payment successful!");
+            await saveFinalOrderToDatabase('RAZORPAY');
+          },
+          prefill: { contact: phone },
+          theme: { color: "#E5B35C" }
+        };
+
+        const paymentObject = new window.Razorpay(options);
+        paymentObject.on('payment.failed', function () {
+          toast.error("Payment failed or cancelled.");
+          setIsSubmitting(false);
+        });
+        paymentObject.open();
+
+      } catch (err: any) {
+        toast.error(err.message || "Checkout failed");
+        setIsSubmitting(false);
+      }
+    } 
+    // PATH 2: STATIC UPI OR CASH
+    else {
+      await saveFinalOrderToDatabase(paymentMode);
+    }
+  };
+
   // --- SUCCESS SCREEN ---
   if (orderComplete) {
     return (
@@ -120,22 +183,24 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
         <div className="w-24 h-24 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center text-4xl mb-6">✓</div>
         <h2 className="text-3xl font-bold text-white mb-2">Order Sent!</h2>
         
-        {/* Dynamic Success Message based on Payment Mode */}
         {paymentMode === 'UPI' ? (
           <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl mb-8 max-w-sm">
             <p className="text-blue-400 font-bold mb-1">Action Required:</p>
-            <p className="text-gray-300 text-sm">Your order is pending. Please show your green UPI success screen to the counter staff so the kitchen can begin preparing your food.</p>
+            <p className="text-gray-300 text-sm">Please show your green UPI success screen to the counter staff.</p>
           </div>
-        ) : (
+        ) : paymentMode === 'CASH' ? (
           <div className="bg-yellow-900/20 border border-yellow-500/30 p-4 rounded-xl mb-8 max-w-sm">
             <p className="text-yellow-400 font-bold mb-1">Pay at Counter</p>
-            <p className="text-gray-300 text-sm">The kitchen has received your order! Please pay ₹{finalTotal} in cash at the counter.</p>
+            <p className="text-gray-300 text-sm">Please pay ₹{finalTotal} in cash at the counter.</p>
+          </div>
+        ) : (
+          <div className="bg-[#E5B35C]/20 border border-[#E5B35C]/30 p-4 rounded-xl mb-8 max-w-sm">
+            <p className="text-[#E5B35C] font-bold mb-1">Payment Verified</p>
+            <p className="text-gray-300 text-sm">Your digital payment was successful and the kitchen is preparing your food.</p>
           </div>
         )}
 
-        <button onClick={onBack} className="bg-[#E5B35C] text-[#0B0E14] font-bold py-3 px-8 rounded-xl shadow-lg">
-          Return to Menu
-        </button>
+        <button onClick={onBack} className="bg-[#E5B35C] text-[#0B0E14] font-bold py-3 px-8 rounded-xl shadow-lg">Return to Menu</button>
       </div>
     );
   }
@@ -180,7 +245,6 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
             {step === 'payment' ? 'Complete Order' : 'Your Details'}
           </h2>
           
-          {/* STEP 1: DETAILS */}
           {step === 'details' ? (
             <form onSubmit={handleProceedToPayment} className="space-y-4">
               <div>
@@ -194,22 +258,26 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">Payment Method</label>
                 <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className="w-full bg-[#0B0E14] border border-gray-800 rounded-xl p-3 text-white outline-none focus:border-[#E5B35C]">
-                  {vendorPayment?.available && <option value="UPI">Pay via UPI / QR</option>}
+                  {vendorPayment?.available && vendorPayment?.paymentType === 'RAZORPAY' && <option value="RAZORPAY">Pay securely with Razorpay</option>}
+                  {vendorPayment?.available && vendorPayment?.paymentType === 'UPI' && <option value="UPI">Pay via UPI / QR</option>}
                   <option value="CASH">Pay Cash at Counter</option>
                 </select>
               </div>
-              <button type="submit" className="w-full mt-4 bg-[#E5B35C] text-[#0B0E14] font-bold py-3.5 rounded-xl transition-opacity hover:bg-[#d4a24b]">
-                Continue
-              </button>
+              <button type="submit" className="w-full mt-4 bg-[#E5B35C] text-[#0B0E14] font-bold py-3.5 rounded-xl transition-opacity hover:bg-[#d4a24b]">Continue</button>
             </form>
-
           ) : (
-
-            /* STEP 2: PAYMENT / CONFIRMATION */
             <div className="space-y-4">
               
-              {/* UPI PATH */}
-              {paymentMode === 'UPI' && vendorPayment?.available ? (
+              {/* RAZORPAY PATH */}
+              {paymentMode === 'RAZORPAY' && (
+                <div className="bg-[#0B0E14] border border-gray-800 rounded-xl p-5 text-center mb-6 shadow-lg">
+                  <h3 className="text-[#E5B35C] font-serif text-xl mb-4">Amount Due: ₹{finalTotal}</h3>
+                  <p className="text-sm text-gray-400 mb-4">You will be redirected to the secure payment gateway.</p>
+                </div>
+              )}
+
+              {/* STATIC UPI PATH */}
+              {paymentMode === 'UPI' && vendorPayment?.available && (
                 <div className="bg-[#0B0E14] border border-gray-800 rounded-xl p-5 text-center mb-6 shadow-lg">
                   <h3 className="text-[#E5B35C] font-serif text-xl mb-4">Amount Due: ₹{finalTotal}</h3>
                   <a href={`upi://pay?pa=${vendorPayment.upiId}&pn=Restaurant%20Order&am=${finalTotal}&cu=INR`} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md hover:bg-blue-700 transition-colors mb-6 flex items-center justify-center gap-2">
@@ -226,8 +294,10 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
                   <p className="text-xs text-gray-400 mb-1">UPI ID: <span className="text-white font-mono">{vendorPayment.upiId}</span></p>
                   <p className="text-[10px] text-red-400 mt-3 font-bold uppercase">⚠️ Do not close this page until payment is sent!</p>
                 </div>
-              ) : (
-                /* CASH PATH */
+              )}
+
+              {/* CASH PATH */}
+              {paymentMode === 'CASH' && (
                 <div className="bg-[#0B0E14] border border-gray-800 rounded-xl p-6 text-center mb-6">
                   <span className="text-4xl mb-4 block">💵</span>
                   <h3 className="text-white font-bold text-lg mb-2">Pay ₹{finalTotal} at Counter</h3>
@@ -235,12 +305,8 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
                 </div>
               )}
 
-              <button 
-                onClick={handlePlaceOrder} 
-                disabled={isSubmitting} 
-                className="w-full bg-[#E5B35C] text-[#0B0E14] font-bold py-3.5 rounded-xl transition-opacity disabled:opacity-50"
-              >
-                {isSubmitting ? 'Sending to Kitchen...' : paymentMode === 'UPI' ? 'I Have Paid & Verify Order' : 'Place Order Now'}
+              <button onClick={handlePlaceOrder} disabled={isSubmitting} className="w-full bg-[#E5B35C] text-[#0B0E14] font-bold py-3.5 rounded-xl transition-opacity disabled:opacity-50">
+                {isSubmitting ? 'Processing...' : paymentMode === 'RAZORPAY' ? 'Pay Now' : paymentMode === 'UPI' ? 'I Have Paid & Verify Order' : 'Place Order Now'}
               </button>
             </div>
           )}

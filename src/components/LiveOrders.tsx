@@ -15,6 +15,7 @@ interface Order {
   paymentMode: string;
   kitchenStatus: 'pending' | 'preparing' | 'completed';
   total: number;
+  token: number;          // 👈 ADD THIS LINE
   tableId?: string;       
   customerPhone?: string; 
   items: OrderItem[];
@@ -113,7 +114,9 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
                 
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <p className="text-xl font-bold text-white">{order.tableId || 'No Table'}</p>
+                    <p className="text-xl font-bold text-white">
+                    <span className="text-[#E5B35C] mr-2">#{order.token}</span> {order.tableId ? `• ${order.tableId}` : ''}
+                    </p>
                     <p className="text-xs text-gray-500">{order.customerPhone}</p>
                   </div>
                   <div className="text-right">
@@ -148,14 +151,15 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
           No active tickets. Kitchen is clear!
         </div>
       ) : (
-        standardOrders.map((order, index) => (
+        standardOrders.map((order) => (
           <div key={order.id} className="bg-[#13161F] border border-[#1F2330] rounded-xl p-5 flex flex-col md:flex-row justify-between md:items-center gap-4 shadow-sm">
             
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <h3 className="text-xl font-serif text-white">
-                  {order.tableId ? order.tableId : `Token #${index + 1}`}
-                </h3>
+              <h3 className="text-xl font-serif text-white flex items-center">
+              <span className="text-[#E5B35C] font-bold mr-2 text-2xl">#{order.token}</span> 
+              <span className="text-gray-300">{order.tableId ? `• ${order.tableId}` : '• Takeaway'}</span>
+              </h3>
                 {order.kitchenStatus === 'pending' && <span className="bg-[#3D2C1D] text-[#E5B35C] px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-[#E5B35C]/30">New</span>}
               </div>
               <p className="text-xs text-gray-500 mb-3">Just now • {order.paymentMode}</p>

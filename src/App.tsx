@@ -16,6 +16,7 @@ if (!PUBLISHABLE_KEY) {
 
 function App() {
   const [currentView, setCurrentView] = useState<'scanner' | 'menu' | 'checkout' | 'dashboard'>('scanner');
+
   const [vendorId, setVendorId] = useState("spice-street-kitchen");
   const [tableId, setTableId] = useState("Table-Unknown");
 
@@ -24,19 +25,28 @@ function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const secretAdminKey = params.get('admin');
     const scannedVendor = params.get('vendor');
     const scannedTable = params.get('table');
-    
-    // THE SECRET DOOR
-    const secretAdminKey = params.get('admin');
 
+    // RULE 1: Admin mode overrides absolutely everything.
     if (secretAdminKey === 'true') {
       setIsAdminMode(true);
       setCurrentView('dashboard');
-    } else if (scannedVendor && scannedTable) {
+      return; // Stop execution here. Admins don't need customer routing.
+    }
+
+    // RULE 2: Always capture the URL context first so state is never lost on refresh.
+    if (scannedVendor && scannedTable) {
       setVendorId(scannedVendor);
       setTableId(scannedTable);
-      setCurrentView('menu'); 
+    }
+
+    // RULE 3: Now check local storage to decide which screen to show the customer.
+    if (localStorage.getItem('activeOrderId')) {
+      setCurrentView('checkout');
+    } else if (scannedVendor && scannedTable) {
+      setCurrentView('menu');
     }
   }, []);
 

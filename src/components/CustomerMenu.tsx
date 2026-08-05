@@ -9,6 +9,7 @@ interface MenuItem {
   prep: string;
   veg: boolean;
   imageUrl?: string | null; 
+  description?: string | null; 
 }
 
 interface VendorProfile {
@@ -232,7 +233,15 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
               <div className="flex flex-col flex-grow justify-between py-1 pr-1">
                 <div>
                   <h3 className="font-bold text-lg leading-tight mb-1">{item.name}</h3>
-                  <p className={`text-xs line-clamp-2 ${mutedText} leading-relaxed`}>{item.prep}</p>
+                  
+                  {/* 👈 THE NEW DESCRIPTION BLOCK */}
+                  {item.description && (
+                    <p className={`text-xs line-clamp-2 ${mutedText} leading-relaxed mb-1 pr-2`}>
+                      {item.description}
+                    </p>
+                  )}
+                  
+                  <p className={`text-[10px] uppercase font-bold tracking-wider ${mutedText} opacity-70`}>{item.prep}</p>
                 </div>
                 
                 <div className="flex items-center justify-between mt-3">

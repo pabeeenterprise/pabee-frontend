@@ -35,7 +35,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
   const [description, setDescription] = useState('');
   const [costPrice, setCostPrice] = useState('');
   const [remarks, setRemarks] = useState('');
-  const [emoji, setEmoji] = useState('');
   const [badgeLabel, setBadgeLabel] = useState('');
   
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -116,7 +115,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
           description: description || null,
           costPrice: costPrice ? Number(costPrice) : null,
           remarks: remarks || null,
-          emoji: emoji || null,
           badgeLabel: badgeLabel || null
         }),
       });
@@ -127,7 +125,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
         
         // 🌟 NEW: Wipe all state fields clean after successful save
         setName(''); setPrice(''); setPrep('10 min'); setImageFile(null);
-        setDescription(''); setCostPrice(''); setRemarks(''); setEmoji(''); setBadgeLabel('');
+        setDescription(''); setCostPrice(''); setRemarks(''); setBadgeLabel('');
         
         const fileInput = document.getElementById('image-upload') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
@@ -288,10 +286,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Cost Price (₹)</label>
             <input type="number" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} placeholder="e.g. 28" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Emoji</label>
-            <input type="text" value={emoji} onChange={(e) => setEmoji(e.target.value)} placeholder="🍛" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
           </div>
         </div>
 

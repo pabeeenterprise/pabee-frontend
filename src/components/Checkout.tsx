@@ -309,7 +309,7 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
           {step === 'details' ? (
             <form onSubmit={handleProceedToPayment} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">Table Number</label>
+                <label className="block text-xs font-bold text-gray-500 mb-1">Your Name *</label>
                 <input type="text" required placeholder="e.g. Tejas" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full bg-[#0B0E14] border border-gray-800 rounded-xl p-3 text-white outline-none focus:border-[#E5B35C]" />
               </div>
               <div>

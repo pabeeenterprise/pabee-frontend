@@ -14,7 +14,6 @@ type MenuItem = {
   imageUrl?: string | null;
   description?: string;
   costPrice?: number;
-  emoji?: string;
   remarks?: string;
   badgeLabel?: string;
 };
@@ -334,7 +333,9 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt={item.name} className="w-10 h-10 object-cover rounded-md border border-gray-700" />
                     ) : (
-                      <div className="w-10 h-10 bg-gray-800 rounded-md flex items-center justify-center text-xs text-gray-500">{item.emoji || 'No Img'}</div>
+                      <div className="w-10 h-10 bg-gray-800 rounded-md flex items-center justify-center text-lg opacity-50">
+                        {item.veg ? '🥗' : '🍗'}
+                      </div>
                     )}
                   </td>
                   <td className="p-4">
@@ -407,11 +408,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                   <option value="Drinks">Drinks</option>
                   <option value="Dessert">Dessert</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase mb-1.5">Emoji <span className="text-[10px] text-gray-500 lowercase">(shown if no image)</span></label>
-                <input type="text" value={editingItem.emoji || ''} onChange={(e) => setEditingItem({ ...editingItem, emoji: e.target.value })} placeholder="🍛" className="w-full bg-[#130B07] border border-[#3E291C] rounded-xl p-3 text-white outline-none focus:border-[#E5B35C] text-sm" />
               </div>
 
               <div>

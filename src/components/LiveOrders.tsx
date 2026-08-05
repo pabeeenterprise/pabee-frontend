@@ -175,17 +175,12 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
 
             <div className="flex gap-3 mt-4 md:mt-0">
               {order.kitchenStatus === 'pending' ? (
-                <>
-                  <button className="px-4 py-2 bg-transparent border border-gray-600 text-gray-300 rounded-lg text-sm hover:text-white hover:border-gray-400 transition-colors font-medium">
-                    Print KOT
-                  </button>
-                  <button 
-                    onClick={() => updateStatus(order.id, 'preparing')}
-                    className="px-5 py-2 bg-[#E5B35C]/10 border border-[#E5B35C]/50 text-[#E5B35C] rounded-lg text-sm hover:bg-[#E5B35C] hover:text-[#0B0E14] transition-all font-bold"
-                  >
-                    Start prep
-                  </button>
-                </>
+                <button 
+                  onClick={() => updateStatus(order.id, 'preparing')}
+                  className="px-5 py-2 bg-[#E5B35C]/10 border border-[#E5B35C]/50 text-[#E5B35C] rounded-lg text-sm hover:bg-[#E5B35C] hover:text-[#0B0E14] transition-all font-bold shadow-md"
+                >
+                  Start prep
+                </button>
               ) : (
                 <button 
                   onClick={() => updateStatus(order.id, 'completed')}

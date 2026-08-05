@@ -11,7 +11,7 @@ declare global {
 
 export default function Checkout({ vendorId, tableId, onBack }: { vendorId: string; tableId: string; onBack: () => void }) {
   const { cart, clearCart } = useCart();
-  const [localTableId, setLocalTableId] = useState(tableId);
+  const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
   
   const [paymentMode, setPaymentMode] = useState('UPI'); 
@@ -98,8 +98,8 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
 
   const handleProceedToPayment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!localTableId || phone.length < 10) {
-      toast.error("Please enter a valid Table Number and 10-digit Phone Number");
+    if (!customerName.trim() || phone.length < 10) {
+      toast.error("Please enter your Name and a valid 10-digit Phone Number");
       return;
     }
     setStep('payment');
@@ -122,7 +122,8 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
     try {
       const orderPayload = {
         vendorId,
-        tableId: localTableId,
+        tableId: tableId,
+        customerName: customerName.trim(),
         customerPhone: phone,
         paymentMode: finalPaymentMode,
         total: finalTotal,
@@ -180,8 +181,7 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
           amount: orderData.amount,
           currency: orderData.currency,
           name: "Your Order",
-          description: `Table ${localTableId}`,
-          order_id: orderData.id,
+          description: `Order for ${customerName}`,          order_id: orderData.id,
           handler: async function () {
             // SUCCESS! They paid. Now save the food order.
             toast.success("Payment successful!");
@@ -310,7 +310,7 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
             <form onSubmit={handleProceedToPayment} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">Table Number</label>
-                <input type="text" required placeholder="e.g. Table 4" value={localTableId} onChange={(e) => setLocalTableId(e.target.value)} className="w-full bg-[#0B0E14] border border-gray-800 rounded-xl p-3 text-white outline-none focus:border-[#E5B35C]" />
+                <input type="text" required placeholder="e.g. Tejas" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full bg-[#0B0E14] border border-gray-800 rounded-xl p-3 text-white outline-none focus:border-[#E5B35C]" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">Phone Number</label>

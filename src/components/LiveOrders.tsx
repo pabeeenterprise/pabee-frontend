@@ -15,8 +15,9 @@ interface Order {
   paymentMode: string;
   kitchenStatus: 'pending' | 'preparing' | 'completed';
   total: number;
-  token: number;          // 👈 ADD THIS LINE
-  tableId?: string;       
+  token: number;
+  tableId?: string;    
+  customerName: string;   
   customerPhone?: string; 
   items: OrderItem[];
 }
@@ -115,7 +116,7 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <p className="text-xl font-bold text-white">
-                    <span className="text-[#E5B35C] mr-2">#{order.token}</span> {order.tableId ? `• ${order.tableId}` : ''}
+                    <span className="text-[#E5B35C] mr-2">#{order.token}</span> {order.customerName}
                     </p>
                     <p className="text-xs text-gray-500">{order.customerPhone}</p>
                   </div>
@@ -158,7 +159,7 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
               <div className="flex items-center gap-3 mb-1">
               <h3 className="text-xl font-serif text-white flex items-center">
               <span className="text-[#E5B35C] font-bold mr-2 text-2xl">#{order.token}</span> 
-              <span className="text-gray-300">{order.tableId ? `• ${order.tableId}` : '• Takeaway'}</span>
+              <span className="text-gray-300">• {order.customerName}</span>
               </h3>
                 {order.kitchenStatus === 'pending' && <span className="bg-[#3D2C1D] text-[#E5B35C] px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-[#E5B35C]/30">New</span>}
               </div>

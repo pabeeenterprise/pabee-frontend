@@ -28,24 +28,28 @@ function App() {
     const secretAdminKey = params.get('admin');
     const scannedVendor = params.get('vendor');
     const scannedTable = params.get('table');
-
+  
     // RULE 1: Admin mode overrides absolutely everything.
     if (secretAdminKey === 'true') {
       setIsAdminMode(true);
       setCurrentView('dashboard');
-      return; // Stop execution here. Admins don't need customer routing.
+      return; 
     }
-
-    // RULE 2: Always capture the URL context first so state is never lost on refresh.
-    if (scannedVendor && scannedTable) {
+  
+    // RULE 2: Set the Vendor ID if it exists in the URL (even without a table!)
+    if (scannedVendor) {
       setVendorId(scannedVendor);
+    }
+  
+    // Set table ONLY if it actually exists in the URL
+    if (scannedTable) {
       setTableId(scannedTable);
     }
-
-    // RULE 3: Now check local storage to decide which screen to show the customer.
+  
+    // RULE 3: Routing logic
     if (localStorage.getItem('activeOrderId')) {
       setCurrentView('checkout');
-    } else if (scannedVendor && scannedTable) {
+    } else if (scannedVendor) {
       setCurrentView('menu');
     }
   }, []);

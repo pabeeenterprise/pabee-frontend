@@ -226,13 +226,15 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
                   ) : (
                     <span className="text-3xl opacity-50">{item.veg ? '🥗' : '🍗'}</span>
                   )}
-                 {/* Premium Veg/Non-Veg indicator bubble */}
-                 <div className={`absolute top-2 left-2 w-4 h-4 rounded-full border-2 border-white/20 backdrop-blur-md shadow-sm ${item.veg ? 'bg-green-500' : 'bg-red-500'}`}></div>
               </div>
 
               <div className="flex flex-col flex-grow justify-between py-1 pr-1">
                 <div>
-                  <h3 className="font-bold text-lg leading-tight mb-1">{item.name}</h3>
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className="font-bold text-lg leading-tight pr-2">{item.name}</h3>
+                  {/* 👈 THE MOVED INDICATOR */}
+                  <div className={`w-3.5 h-3.5 rounded-full border border-gray-700 shadow-sm shrink-0 mt-1.5 ${item.veg ? 'bg-[#4ADE80]' : 'bg-[#EF4444]'}`}></div>
+                </div>
                   
                   {/* 👈 THE NEW DESCRIPTION BLOCK */}
                   {item.description && (

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/clerk-react'; // 🌟 1. IMPORT CLERK AUTH
 
-// 🌟 UPDATED: Interface now expects 'applyTo' from the database
 interface Promo {
   id: string;
   code: string;
@@ -15,8 +15,10 @@ interface Promo {
 }
 
 export default function OffersPromos({ vendorId }: { vendorId: string }) {
+  const { getToken } = useAuth(); // 🌟 2. EXTRACT THE TOKEN GENERATOR
+
   const [promos, setPromos] = useState<Promo[]>([]);
-  const [categories, setCategories] = useState<string[]>([]); // 🌟 NEW: Stores the dynamic categories
+  const [categories, setCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Form states matching database
@@ -25,19 +27,17 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
   const [discountValue, setDiscountValue] = useState('');
   const [minOrderValue, setMinOrderValue] = useState('0');
   const [expiresAt, setExpiresAt] = useState('');
-  const [applyTo, setApplyTo] = useState('ALL'); // 🌟 NEW: Default form state
+  const [applyTo, setApplyTo] = useState('ALL');
 
   // 1. Fetch Promos AND Categories from Backend
   const fetchData = async () => {
     try {
-      // Fetch existing promos
       const promoRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos`);
       if (promoRes.ok) {
         const data = await promoRes.json();
         setPromos(data.promos || []);
       }
 
-      // 🌟 NEW: Silently fetch the menu to extract the vendor's actual categories
       const menuRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/menu-editor`);
       if (menuRes.ok) {
         const menuData = await menuRes.json();
@@ -63,9 +63,14 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
     if (!code || !discountValue) return;
 
     try {
+      const token = await getToken(); // 🌟 3. GRAB THE SECURE JWT TOKEN
+
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // 🌟 4. ATTACH IT TO THE HEADERS
+        },
         body: JSON.stringify({
           code: code.toUpperCase(),
           type: discountType,
@@ -73,7 +78,7 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
           minOrderValue: Number(minOrderValue),
           expiresAt: expiresAt || null,
           isActive: true,
-          applyTo: applyTo // 🌟 NEW: Send the category target to Postgres
+          applyTo: applyTo 
         })
       });
       
@@ -86,6 +91,7 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
         setApplyTo('ALL');
         fetchData();
       } else {
+        // Now if it fails, it's actually Prisma throwing the error, not a 401
         alert("Failed to create. This code might already exist!");
       }
     } catch (err) {
@@ -97,7 +103,12 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
   const handleDeleteOffer = async (id: string) => {
     if (!window.confirm("Delete this promo code?")) return;
     try {
-      await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos/${id}`, { method: 'DELETE' });
+      const token = await getToken(); // Need token for deletion too if it's protected
+      
+      await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/promos/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       fetchData();
     } catch (err) {
       console.error("Failed to delete", err);

@@ -28,8 +28,8 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   const [vendorProfile, setVendorProfile] = useState<VendorProfile | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
-  const { addToCart, cartCount } = useCart();
-  const [activePromoBanner, setActivePromoBanner] = useState<string | null>(null);
+  const { addToCart, cartCount, cartTotal } = useCart();
+  const [activePromo, setActivePromo] = useState<any | null>(null);
 
   // Trigger re-animation when category changes
   const [animateKey, setAnimateKey] = useState(0);
@@ -70,10 +70,9 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           if (promoRes.ok) {
             const promoData = await promoRes.json();
             const active = promoData.promos?.find((p: any) => p.isActive);
-            if (active) {
-              const discountText = active.type === 'FLAT' ? `₹${active.value} OFF` : `${active.value}% OFF`;
-              setActivePromoBanner(`🎉 Code ${active.code} • ${discountText} on orders over ₹${active.minOrderValue}`);
-            }
+          if (active) {
+            setActivePromo(active); // Save the raw database object to run the math
+          }
           }
         } catch (err) {
           console.error("Failed to load data", err);
@@ -121,6 +120,10 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   const categories = ['All', ...new Set(menu.map((item) => item.category))];
   const displayedItems = activeCategory === 'All' ? menu : menu.filter(item => item.category === activeCategory);
 
+  // 🧠 ZOMATO MATH ENGINE
+  const delta = activePromo ? activePromo.minOrderValue - cartTotal : 0;
+  const showNudge = cartCount > 0 && activePromo && delta > 0;
+
   return (
     <div className={`min-h-screen ${bgColor} ${textColor} pb-32 ${vendorProfile.fontFamily} transition-colors duration-500 selection:bg-gray-700`}>
       
@@ -140,16 +143,6 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           -webkit-backdrop-filter: blur(16px);
         }
       `}</style>
-
-      {/* 2. PROMO BANNER: Marquee Style */}
-      {activePromoBanner && (
-        <div 
-          className="text-[#0B0E14] text-xs font-bold text-center py-2.5 px-4 tracking-wider z-50 relative overflow-hidden"
-          style={{ backgroundColor: vendorProfile.accentColor }} 
-        >
-          <span className="relative z-10">{activePromoBanner}</span>
-        </div>
-      )}
 
       {/* 3. HERO SECTION: Parallax Fade */}
       <div className="relative w-full h-56 md:h-72 lg:h-80 overflow-hidden bg-gray-900">
@@ -268,19 +261,37 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
         )}
       </div>
 
-      {/* 6. FLOATING CHECKOUT BAR: Bouncing Entrance & Glow */}
+      {/* 6. FLOATING CHECKOUT BAR WITH ZOMATO NUDGE */}
       {cartCount > 0 && (
-        <div className="fixed bottom-6 left-0 right-0 px-4 z-50 cascade-item" style={{ animationDelay: '200ms' }}>
-          <div className="max-w-md mx-auto">
+        <div className="fixed bottom-0 left-0 w-full px-4 pb-6 flex flex-col items-center z-50 pointer-events-none cascade-item" style={{ animationDelay: '200ms' }}>
+          <div className="w-full max-w-md pointer-events-auto relative">
+            
+            {/* 🚨 THE ZOMATO UPSELL NUDGE (Tucks underneath the button) */}
+            {showNudge && (
+              <div className="bg-[#182135] border border-[#2B3A5A] border-b-0 rounded-t-2xl px-4 pt-3 pb-6 -mb-4 flex flex-col items-center justify-center text-center shadow-[0_-10px_30px_rgba(0,0,0,0.4)] transition-all duration-300">
+                <span className="text-blue-400 font-bold text-[11px] flex items-center gap-1.5 uppercase tracking-wide">
+                  <span className="bg-[#2B3A5A] text-blue-400 rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
+                    %
+                  </span>
+                  Unlock Extra {activePromo.type === 'FLAT' ? `₹${activePromo.value}` : `${activePromo.value}%`} OFF
+                </span>
+                <span className="text-gray-300 text-[11px] mt-1 font-medium">
+                  Add items worth ₹{delta} or more to unlock
+                </span>
+              </div>
+            )}
+
+            {/* 🟡 YOUR EXISTING CHECKOUT BUTTON */}
             <button 
               onClick={onGoToCheckout}
-              className={`w-full text-[#0B0E14] font-black py-4 ${vendorProfile.buttonRoundness} flex justify-between items-center px-6 transition-all active:scale-95 shadow-2xl relative overflow-hidden group`}
+              className="relative z-10 w-full font-black py-4 flex justify-between items-center px-6 transition-all active:scale-95 shadow-2xl overflow-hidden group"
               style={{ 
                 backgroundColor: vendorProfile.accentColor,
-                boxShadow: `0 10px 25px -5px ${vendorProfile.accentColor}40` // Dynamic colored glow
+                color: '#0B0E14',
+                borderRadius: vendorProfile.buttonRoundness,
+                boxShadow: `0 10px 25px -5px ${vendorProfile.accentColor}40`
               }}
             >
-              {/* Shiny reflection sweep effect */}
               <div className="absolute inset-0 w-full h-full bg-white/20 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] transform skew-x-12"></div>
               
               <div className="flex items-center gap-3 relative z-10">
@@ -294,7 +305,6 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           </div>
         </div>
       )}
-
     </div>
   );
 }

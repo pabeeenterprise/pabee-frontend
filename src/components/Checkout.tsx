@@ -16,6 +16,7 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
   
   const [paymentMode, setPaymentMode] = useState('UPI'); 
   const [promoCode, setPromoCode] = useState('');
+  const [availablePromos, setAvailablePromos] = useState<any[]>([]);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isPromoApplied, setIsPromoApplied] = useState(false);
   const [step, setStep] = useState<'details' | 'payment'>('details');
@@ -33,6 +34,29 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
   const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
   const subtotal = cart.reduce((sum, cartItem) => sum + (cartItem.price * cartItem.qty), 0);
   const finalTotal = Math.max(0, subtotal - discountAmount);
+
+  // 🧠 FETCH ACTIVE OFFERS FOR DROPDOWN
+  useEffect(() => {
+    const fetchAvailablePromos = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/vendors/${vendorId}/promos`);
+        
+        if (res.ok) {
+          const data = await res.json();
+          // Automatically filter out offers that are toggled off or expired
+          const validPromos = data.promos.filter((p: any) => {
+            const isNotExpired = !p.expiresAt || new Date(p.expiresAt) >= new Date();
+            return p.isActive && isNotExpired;
+          });
+          setAvailablePromos(validPromos);
+        }
+      } catch (err) {
+        console.error("Failed to load promos", err);
+      }
+    };
+
+    if (vendorId) fetchAvailablePromos();
+  }, [vendorId]);
 
   useEffect(() => {
     const fetchPaymentData = async () => {
@@ -296,8 +320,27 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
 
         {step === 'details' && !isPromoApplied && (
           <div className="flex gap-2 mb-6">
-            <input type="text" placeholder="Have a promo code?" value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} className="flex-1 bg-[#13161F] border border-[#1F2330] rounded-xl p-3 text-white text-sm focus:border-[#E5B35C] outline-none uppercase" />
-            <button onClick={handleApplyPromo} className="bg-[#1F2330] text-white px-4 rounded-xl font-bold text-sm hover:bg-gray-700">Apply</button>
+            {/* 🏷️ DYNAMIC PROMO DROPDOWN */}
+            <select 
+              value={promoCode} 
+              onChange={(e) => setPromoCode(e.target.value)}
+              className="flex-1 bg-[#13161F] border border-[#1F2330] rounded-xl p-3 text-white text-sm focus:border-[#E5B35C] outline-none cursor-pointer appearance-none"
+            >
+              <option value="">Select an available offer...</option>
+              {availablePromos.map(promo => (
+                <option key={promo.id} value={promo.code}>
+                  {promo.code} — {promo.type === 'FLAT' ? `₹${promo.value}` : `${promo.value}%`} OFF (Min ₹{promo.minOrderValue})
+                </option>
+              ))}
+            </select>
+            
+            <button 
+              onClick={handleApplyPromo} 
+              disabled={!promoCode}
+              className="bg-[#1F2330] text-white px-6 py-3 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700 transition-colors"
+            >
+              Apply
+            </button>
           </div>
         )}
 

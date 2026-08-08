@@ -5,12 +5,13 @@ export interface CartItem {
   name: string;
   price: number;
   qty: number;
-  veg: boolean; // 👈 Add this line!
+  veg: boolean;
+  category: string;
 }
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (item: { id: string; name: string; price: number; veg: boolean }) => void;
+  addToCart: (item: { id: string; name: string; price: number; veg: boolean; category: string }) => void;
   updateQty: (id: string, delta: number) => void;
   cartTotal: number;
   cartCount: number;
@@ -22,13 +23,25 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  const addToCart = (item: { id: string; name: string; price: number; veg: boolean }) => {
+  const addToCart = (item: { id: string; name: string; price: number; veg: boolean; category: string }) => {
     setCart((prev) => {
-      const existing = prev.find((i) => i.id === item.id);
-      if (existing) {
-        return prev.map((i) => (i.id === item.id ? { ...i, qty: i.qty + 1 } : i));
+      const existingItem = prev.find((i) => i.id === item.id);
+      
+      if (existingItem) {
+        // If it already exists, just increase the quantity
+        return prev.map((i) =>
+          i.id === item.id ? { ...i, qty: i.qty + 1 } : i
+        );
       }
-      return [...prev, { ...item, qty: 1 }];
+      
+      return [...prev, { 
+        id: item.id, 
+        name: item.name, 
+        price: item.price, 
+        veg: item.veg, 
+        category: item.category,
+        qty: 1 
+      }];
     });
   };
 
@@ -39,7 +52,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
   };
 
-// ADD THIS FUNCTION:
 const clearCart = () => {
   setCart([]); // This instantly empties the cart
 };

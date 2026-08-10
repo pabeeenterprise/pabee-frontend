@@ -69,10 +69,16 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           const promoRes = await fetch(`${API_URL}/api/vendors/${realDbId}/promos`);
           if (promoRes.ok) {
             const promoData = await promoRes.json();
-            const active = promoData.promos?.find((p: any) => p.isActive);
-          if (active) {
-            setActivePromo(active); // Save the raw database object to run the math
-          }
+            const active = promoData.promos?.find((p: any) => {
+              const isNotExpired = !p.expiresAt || new Date(new Date(p.expiresAt).setHours(23, 59, 59, 999)) >= new Date();
+              return p.isActive && isNotExpired;
+            });
+
+            if (active) {
+              setActivePromo(active); // Save the valid promo
+            } else {
+              setActivePromo(null); // Force it to hide if the active promo is expired
+            }
           }
         } catch (err) {
           console.error("Failed to load data", err);

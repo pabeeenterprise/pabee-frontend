@@ -22,7 +22,7 @@ interface VendorProfile {
   fontFamily: string;
   buttonRoundness: string;
   showOfferStrip?: boolean;
-  offerStripText?: string;
+  offerText?: string;
 }
 
 export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: string, onGoToCheckout: () => void }) {
@@ -59,7 +59,7 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
             fontFamily: profileData.fontFamily || 'font-sans',
             buttonRoundness: profileData.buttonRoundness || 'rounded-xl',
             showOfferStrip: profileData.showOfferStrip || false,
-            offerStripText: profileData.offerStripText || '',
+            offerText: profileData.offerText || '',
           });
 
           const realDbId = profileData.id;
@@ -153,6 +153,16 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           -webkit-backdrop-filter: blur(16px);
         }
       `}</style>
+      
+      {/* 2. STATIC OFFER STRIP (From Dashboard Settings) */}
+      {vendorProfile?.showOfferStrip && vendorProfile?.offerText && (
+        <div 
+          className="text-[#0B0E14] text-xs font-bold text-center py-2.5 px-4 tracking-wide z-50 relative shadow-md"
+          style={{ backgroundColor: vendorProfile.accentColor }} 
+        >
+          <span className="relative z-10">{vendorProfile.offerText}</span>
+        </div>
+      )}
 
       {/* 3. HERO SECTION: Parallax Fade */}
       <div className="relative w-full h-56 md:h-72 lg:h-80 overflow-hidden bg-gray-900">

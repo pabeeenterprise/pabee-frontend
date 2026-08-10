@@ -30,7 +30,13 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   const [vendorProfile, setVendorProfile] = useState<VendorProfile | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
-  const { addToCart, cartCount, cartTotal } = useCart();
+  const { cart, addToCart, updateQty, cartCount, cartTotal } = useCart();
+  const [pastOrders, setPastOrders] = useState<any[]>([]);
+
+  useEffect(() => {
+    const history = JSON.parse(localStorage.getItem('pabee_order_history') || '[]');
+    setPastOrders(history);
+  }, []);
   const [activePromo, setActivePromo] = useState<any | null>(null);
 
   // Trigger re-animation when category changes
@@ -195,6 +201,36 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
         </div>
       )}
 
+      {/* 🚀 QUICK REORDER SECTION */}
+      {pastOrders.length > 0 && (
+        <div className="px-4 mb-6 max-w-3xl mx-auto w-full cascade-item">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Order It Again</h3>
+          <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+            {pastOrders.map((order, idx) => (
+              <div key={idx} className={`shrink-0 w-64 ${cardBg} border ${borderColor} rounded-2xl p-4 flex flex-col gap-2 shadow-sm`}>
+                <div className="flex justify-between items-start">
+                  <span className="text-[10px] text-gray-400 font-mono">
+                    {new Date(order.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </span>
+                  <span className="font-black text-sm" style={{ color: vendorProfile.accentColor }}>₹{order.total}</span>
+                </div>
+                <p className="text-sm font-medium line-clamp-2 leading-tight">{order.summary}</p>
+                <button 
+                  onClick={() => {
+                    order.rawItems.forEach((item: any) => addToCart(item));
+                    onGoToCheckout();
+                  }}
+                  className="mt-2 w-full py-2 rounded-xl text-xs font-bold transition-transform active:scale-95"
+                  style={{ backgroundColor: `${vendorProfile.accentColor}20`, color: vendorProfile.accentColor }}
+                >
+                  Add to Cart & Checkout →
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 4. GLASSMORPHISM NAVIGATION: Sticky Blur Effect */}
       <div className={`sticky top-0 z-40 glass-nav border-b ${borderColor} transition-all duration-300`}>
         <div className="flex overflow-x-auto px-4 py-3 space-x-2 no-scrollbar scroll-smooth">
@@ -268,17 +304,37 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
                 <div className="flex items-center justify-between mt-3">
                   <span className="font-black text-xl tracking-tight" style={{ color: vendorProfile.accentColor }}>₹{item.price}</span>
                   
-                  {/* Haptic Add Button */}
-                  <button 
-                    onClick={() => addToCart(item)} 
-                    className={`h-10 w-10 ${vendorProfile.buttonRoundness} font-black flex items-center justify-center text-xl transition-all duration-200 active:scale-75 shadow-sm`}
-                    style={{ 
-                      color: vendorProfile.accentColor,
-                      backgroundColor: `${vendorProfile.accentColor}15`,
-                    }}
-                  >
-                    +
-                  </button>
+
+                  {/* 🧠 DYNAMIC CART CONTROLLER */}
+                  {(() => {
+                    const cartItem = cart.find(c => c.id === item.id);
+                    return cartItem ? (
+                      <div className={`h-10 flex items-center justify-between px-2 gap-3 ${vendorProfile.buttonRoundness} shadow-sm border border-[#E5B35C]/30`}
+                           style={{ backgroundColor: `${vendorProfile.accentColor}15` }}>
+                        <button 
+                          onClick={() => updateQty(item.id, -1)}
+                          className="text-xl font-bold px-2 active:scale-75 transition-transform"
+                          style={{ color: vendorProfile.accentColor }}
+                        >−</button>
+                        <span className="font-bold text-sm" style={{ color: vendorProfile.accentColor }}>
+                          {cartItem.qty}
+                        </span>
+                        <button 
+                          onClick={() => updateQty(item.id, 1)}
+                          className="text-xl font-bold px-2 active:scale-75 transition-transform"
+                          style={{ color: vendorProfile.accentColor }}
+                        >+</button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => addToCart(item)} 
+                        className={`h-10 w-10 ${vendorProfile.buttonRoundness} font-black flex items-center justify-center text-xl transition-all duration-200 active:scale-75 shadow-sm`}
+                        style={{ color: vendorProfile.accentColor, backgroundColor: `${vendorProfile.accentColor}15` }}
+                      >
+                        +
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
               

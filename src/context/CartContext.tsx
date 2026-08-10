@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useEffect, useContext, useState, ReactNode } from 'react';
 
 export interface CartItem {
   id: string;
@@ -21,7 +21,16 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // 1. INITIALIZE FROM STORAGE
+  // Instead of starting with [], we check memory first.
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const savedCart = localStorage.getItem('pabee_active_cart');
+      return savedCart ? JSON.parse(savedCart) : [];
+    } catch (error) {
+      return [];
+    }
+  });
 
   const addToCart = (item: { id: string; name: string; price: number; veg: boolean; category: string }) => {
     setCart((prev) => {
@@ -52,9 +61,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
   };
 
-const clearCart = () => {
-  setCart([]); // This instantly empties the cart
-};
+  useEffect(() => {
+    localStorage.setItem('pabee_active_cart', JSON.stringify(cart));
+  }, [cart]);
+
+  const clearCart = () => {
+    setCart([]); 
+    localStorage.removeItem('pabee_active_cart');
+  };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);

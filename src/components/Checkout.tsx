@@ -163,6 +163,15 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
       if (orderRes.ok) {
         // 👇 CRITICAL NEW LOGIC: Capture the ID and Token
         const orderData = await orderRes.json();
+        const completedOrder = {
+          id: orderData.id,
+          date: new Date().toISOString(),
+          summary: cart.map(c => `${c.qty}x ${c.name}`).join(' • '), 
+          total: finalTotal,
+          rawItems: cart 
+        };
+        const existingHistory = JSON.parse(localStorage.getItem('pabee_order_history') || '[]');
+        localStorage.setItem('pabee_order_history', JSON.stringify([completedOrder, ...existingHistory].slice(0, 3)));
         localStorage.setItem('activeOrderId', orderData.id);
         localStorage.setItem('activeOrderToken', orderData.tokenNumber);
         setOrderId(orderData.id);

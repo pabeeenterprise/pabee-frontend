@@ -21,6 +21,8 @@ interface VendorProfile {
   themeMode: 'dark' | 'light';
   fontFamily: string;
   buttonRoundness: string;
+  showOfferStrip?: boolean;
+  offerStripText?: string;
 }
 
 export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: string, onGoToCheckout: () => void }) {
@@ -55,7 +57,9 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
             accentColor: profileData.accentColor || '#E5B35C',
             themeMode: profileData.themeMode || 'dark',
             fontFamily: profileData.fontFamily || 'font-sans',
-            buttonRoundness: profileData.buttonRoundness || 'rounded-xl'
+            buttonRoundness: profileData.buttonRoundness || 'rounded-xl',
+            showOfferStrip: profileData.showOfferStrip || false,
+            offerStripText: profileData.offerStripText || '',
           });
 
           const realDbId = profileData.id;

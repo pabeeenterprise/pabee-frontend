@@ -153,16 +153,6 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           -webkit-backdrop-filter: blur(16px);
         }
       `}</style>
-      
-      {/* 2. STATIC OFFER STRIP (From Dashboard Settings) */}
-      {vendorProfile?.showOfferStrip && vendorProfile?.offerText && (
-        <div 
-          className="text-[#0B0E14] text-xs font-bold text-center py-2.5 px-4 tracking-wide z-50 relative shadow-md"
-          style={{ backgroundColor: vendorProfile.accentColor }} 
-        >
-          <span className="relative z-10">{vendorProfile.offerText}</span>
-        </div>
-      )}
 
       {/* 3. HERO SECTION: Parallax Fade */}
       <div className="relative w-full h-56 md:h-72 lg:h-80 overflow-hidden bg-gray-900">
@@ -189,6 +179,22 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
         <h1 className="text-3xl font-black tracking-tight">{vendorProfile.name}</h1>
       </div>
       
+      {/* 2. STATIC OFFER STRIP (From Dashboard Settings) */}
+      {vendorProfile?.showOfferStrip && vendorProfile?.offerText && (
+        <div className="px-4 mb-4 w-full max-w-3xl mx-auto">
+          <div 
+            className="text-[#0B0E14] text-[11px] font-bold text-center py-2.5 px-4 tracking-wide shadow-md flex items-center justify-center gap-1.5"
+            style={{ 
+              backgroundColor: vendorProfile.accentColor,
+              borderRadius: vendorProfile.buttonRoundness || '0.75rem'
+            }} 
+          >
+            <span className="text-sm opacity-80">⚡</span>
+            <span>{vendorProfile.offerText}</span>
+          </div>
+        </div>
+      )}
+
       {/* 4. GLASSMORPHISM NAVIGATION: Sticky Blur Effect */}
       <div className={`sticky top-0 z-40 glass-nav border-b ${borderColor} transition-all duration-300`}>
         <div className="flex overflow-x-auto px-4 py-3 space-x-2 no-scrollbar scroll-smooth">

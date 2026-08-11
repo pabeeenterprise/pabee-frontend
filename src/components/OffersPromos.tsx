@@ -19,6 +19,7 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
 
   const [promos, setPromos] = useState<Promo[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [menuItems, setMenuItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Form states matching database
@@ -42,6 +43,7 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
       if (menuRes.ok) {
         const menuData = await menuRes.json();
         if (menuData.items) {
+          setMenuItems(menuData.items); 
           const uniqueCategories = Array.from(new Set(menuData.items.map((item: any) => item.category))) as string[];
           setCategories(uniqueCategories);
         }
@@ -243,9 +245,18 @@ export default function OffersPromos({ vendorId }: { vendorId: string }) {
                 className="bg-[#1A1D24] border border-[#2A2E39] rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-[#E5B35C] transition-all cursor-pointer appearance-none"
               >
                 <option value="ALL">All items</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
+                <optgroup label="Categories">
+                  {categories.map((cat) => (
+                    <option key={`cat-${cat}`} value={cat}>{cat}</option>
+                  ))}
+                </optgroup>
+                
+                <optgroup label="Specific Items">
+                  {menuItems.map((item) => (
+                    <option key={`item-${item.id}`} value={item.name}>{item.name}</option>
+                  ))}
+                </optgroup>
+                
               </select>
             </div>
 

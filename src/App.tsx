@@ -47,9 +47,7 @@ function App() {
     }
   
     // RULE 3: Routing logic
-    if (localStorage.getItem('activeOrderId')) {
-      setCurrentView('checkout');
-    } else if (scannedVendor) {
+    if (scannedVendor) {
       setCurrentView('menu');
     }
   }, []);

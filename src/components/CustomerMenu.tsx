@@ -33,6 +33,36 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   const { cart, addToCart, updateQty, cartCount, cartTotal } = useCart();
   const [pastOrders, setPastOrders] = useState<any[]>([]);
 
+  // 🧠 ACTIVE ORDER TRACKING STATES
+  const [activeOrderId, setActiveOrderId] = useState(localStorage.getItem('activeOrderId') || null);
+  const [activeOrderToken] = useState(localStorage.getItem('activeOrderToken') || null);
+  const [orderStatus, setOrderStatus] = useState(localStorage.getItem('activeOrderStatus') || 'pending');
+
+  // 🧠 THE 5-SECOND POLLING ENGINE
+  useEffect(() => {
+    if (!activeOrderId) return;
+
+    const checkStatus = async () => {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
+        const res = await fetch(`${API_URL}/api/orders/${activeOrderId}/status`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.kitchenStatus) {
+            setOrderStatus(data.kitchenStatus);
+            localStorage.setItem('activeOrderStatus', data.kitchenStatus); // Cache for refresh
+          }
+        }
+      } catch (err) {
+        console.error("Tracker polling failed");
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 5000);
+    return () => clearInterval(interval);
+  }, [activeOrderId]);
+
   useEffect(() => {
     const history = JSON.parse(localStorage.getItem('pabee_order_history') || '[]');
     setPastOrders(history);
@@ -227,6 +257,51 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* 🚀 COMPACT LIVE ORDER TRACKER (Dynamic Island) */}
+      {activeOrderId && (
+        <div className="px-4 mb-6 max-w-3xl mx-auto w-full cascade-item">
+          <div className="bg-[#13161F] border border-[#1F2330] rounded-2xl p-4 shadow-xl flex items-center justify-between">
+            
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Order Token</span>
+              <span className="text-3xl font-black text-[#E5B35C] leading-none mt-1">#{activeOrderToken}</span>
+            </div>
+
+            <div className="flex flex-col items-end text-right">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status</span>
+              <div className="flex items-center gap-2 mt-1.5">
+                <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${
+                  orderStatus === 'completed' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-[#E5B35C] shadow-[0_0_8px_#E5B35C]'
+                }`}></div>
+                <span className={`text-sm font-bold ${
+                  orderStatus === 'completed' ? 'text-green-500' : 'text-white'
+                }`}>
+                  {orderStatus === 'pending' && 'Sent to Kitchen'}
+                  {orderStatus === 'preparing' && 'Preparing 🔥'}
+                  {orderStatus === 'completed' && 'Ready for Pickup! ✅'}
+                </span>
+              </div>
+            </div>
+
+            {/* Clear Order Button (Only shows when completed) */}
+            {orderStatus === 'completed' && (
+              <button 
+                onClick={() => {
+                  localStorage.removeItem('activeOrderId');
+                  localStorage.removeItem('activeOrderToken');
+                  localStorage.removeItem('activeOrderStatus');
+                  setActiveOrderId(null);
+                }}
+                className="ml-4 bg-gray-800 text-gray-300 w-8 h-8 rounded-full flex items-center justify-center font-bold hover:bg-gray-700 transition-colors"
+              >
+                ×
+              </button>
+            )}
+
           </div>
         </div>
       )}

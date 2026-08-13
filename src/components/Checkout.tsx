@@ -21,12 +21,6 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
   const [isPromoApplied, setIsPromoApplied] = useState(false);
   const [step, setStep] = useState<'details' | 'payment'>('details');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [orderComplete, setOrderComplete] = useState(false);
-
-  // 🌟 NEW: Live Tracking States
-  const [orderId, setOrderId] = useState(localStorage.getItem('activeOrderId') || '');
-  const [orderToken, setOrderToken] = useState(localStorage.getItem('activeOrderToken') || '');
-  const [orderStatus, setOrderStatus] = useState('pending');
 
   // 🌟 NEW: Expanded payment data type
   const [vendorPayment, setVendorPayment] = useState<{available: boolean, paymentType?: string, upiId?: string, qrImagePath?: string, razorpayKeyId?: string} | null>(null);
@@ -78,26 +72,6 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
     if (vendorId) fetchPaymentData();
   }, [vendorId, API_URL]);
 
-  // 🌟 NEW: The 5-Second Polling Engine
-  useEffect(() => {
-    if (!orderId) return;
-
-    const checkStatus = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/orders/${orderId}/status`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.kitchenStatus) setOrderStatus(data.kitchenStatus);
-        }
-      } catch (err) {
-        console.error("Polling failed");
-      }
-    };
-
-    checkStatus(); // Check immediately
-    const interval = setInterval(checkStatus, 5000); // Check every 5 seconds
-    return () => clearInterval(interval); // Cleanup on unmount
-  }, [orderId, API_URL]);
 
   const handleApplyPromo = async () => {
     if (!promoCode) return;
@@ -172,12 +146,14 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
         };
         const existingHistory = JSON.parse(localStorage.getItem('pabee_order_history') || '[]');
         localStorage.setItem('pabee_order_history', JSON.stringify([completedOrder, ...existingHistory].slice(0, 3)));
+        
+        // 🧠 TRACKING TOKENS & REFRESH STATUS
         localStorage.setItem('activeOrderId', orderData.id);
         localStorage.setItem('activeOrderToken', orderData.tokenNumber);
-        setOrderId(orderData.id);
-        setOrderToken(orderData.tokenNumber);
-        setOrderComplete(true);
+        localStorage.setItem('activeOrderStatus', 'pending'); 
+
         clearCart();
+        onBack(); // 🚀 THIS INSTANTLY ROUTES THEM TO THE MENU
       } else {
         throw new Error("Failed to create order");
       }
@@ -241,63 +217,6 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
       await saveFinalOrderToDatabase(paymentMode);
     }
   };
-
-  // --- SUCCESS SCREEN ---
-  // --- 🌟 NEW: LIVE TRACKING SUCCESS SCREEN ---
-  if (orderComplete || orderId) {
-    return (
-      <div className="min-h-screen bg-[#0B0E14] flex flex-col items-center justify-center p-6 text-center font-sans">
-        
-        {/* THE IDENTIFIER */}
-        <div className="bg-[#13161F] border border-[#1F2330] rounded-2xl p-8 mb-8 w-full max-w-sm shadow-xl">
-          <p className="text-gray-400 text-sm font-bold uppercase tracking-widest mb-2">Order Token</p>
-          <h1 className="text-6xl font-bold text-[#E5B35C]">#{orderToken}</h1>
-          <p className="text-gray-500 text-xs mt-2">Show this number at the counter</p>
-        </div>
-
-        {/* THE LIVE STATUS TRACKER */}
-        <div className="w-full max-w-sm bg-[#13161F] rounded-xl p-6 border border-[#1F2330] shadow-md">
-          <h3 className="text-white font-bold mb-6 text-lg text-left">Live Status</h3>
-          
-          <div className="space-y-8 text-left">
-            <div className="flex items-center gap-4">
-              <div className={`w-4 h-4 rounded-full transition-all duration-300 ${orderStatus === 'pending' || orderStatus === 'preparing' || orderStatus === 'completed' ? 'bg-[#E5B35C] shadow-[0_0_10px_#E5B35C]' : 'bg-gray-700'}`}></div>
-              <span className={orderStatus === 'pending' ? 'text-white font-bold' : 'text-gray-500'}>Order Sent to Kitchen</span>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <div className={`w-4 h-4 rounded-full transition-all duration-300 ${orderStatus === 'preparing' || orderStatus === 'completed' ? 'bg-[#E5B35C] shadow-[0_0_10px_#E5B35C]' : 'bg-gray-700'}`}></div>
-              <span className={orderStatus === 'preparing' ? 'text-white font-bold' : 'text-gray-500'}>Food is Being Prepared 🔥</span>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className={`w-4 h-4 rounded-full transition-all duration-300 ${orderStatus === 'completed' ? 'bg-green-500 shadow-[0_0_12px_#22c55e]' : 'bg-gray-700'}`}></div>
-              <span className={orderStatus === 'completed' ? 'text-green-500 font-bold text-xl' : 'text-gray-500'}>Ready for Pickup! ✅</span>
-            </div>
-          </div>
-        </div>
-
-        {/* ACTION REQUIRED FOR UPI */}
-        {paymentMode === 'UPI' && orderStatus === 'pending' && (
-          <div className="mt-6 bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl w-full max-w-sm">
-            <p className="text-blue-400 font-bold mb-1 text-sm">Action Required:</p>
-            <p className="text-gray-300 text-xs">Please show your UPI payment success to the counter staff.</p>
-          </div>
-        )}
-
-        <button onClick={() => {
-          if (orderStatus !== 'completed' && !window.confirm("Are you sure you want to leave this screen? Your order is not ready yet.")) return;
-          localStorage.removeItem('activeOrderId');
-          localStorage.removeItem('activeOrderToken');
-          setOrderComplete(false);
-          setOrderId('');
-          onBack();
-        }} className="mt-8 text-gray-500 underline text-sm hover:text-white transition-colors">
-          Start a new order
-        </button>
-      </div>
-    );
-  }
 
   // --- CHECKOUT UI ---
   return (

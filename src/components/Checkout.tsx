@@ -198,11 +198,12 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
           },
           prefill: { 
             contact: phone,
-            name: customerName 
+            name: customerName,
+            method: 'upi' // 🚀 THIS SKIPS THE SELECTION SCREEN
           },
           theme: { color: "#E5B35C" },
           
-          // 🧠 UPDATED: Use the 'hide' array instead of custom blocks
+          // Keep the safety 'hide' array just in case the customer hits 'Back' inside the modal
           config: {
             display: {
               hide: [
@@ -213,7 +214,7 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
                 { method: 'paylater' }
               ],
               preferences: {
-                show_default_blocks: true // 👈 Turn native UI back on
+                show_default_blocks: true 
               }
             }
           }

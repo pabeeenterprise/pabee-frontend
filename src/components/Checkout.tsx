@@ -186,34 +186,37 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
 
         // Open the Razorpay Modal
         const options = {
-          key: vendorPayment?.razorpayKeyId, // The public key from our patch
+          key: vendorPayment?.razorpayKeyId,
           amount: orderData.amount,
           currency: orderData.currency,
           name: "Your Order",
-          description: `Order for ${customerName}`,          
+          description: `Order for ${customerName}`,
           order_id: orderData.id,
           handler: async function () {
-            // SUCCESS! They paid. Now save the food order.
             toast.success("Payment successful!");
             await saveFinalOrderToDatabase('RAZORPAY');
           },
-          prefill: { contact: phone },
+          prefill: { 
+            contact: phone,
+            name: customerName 
+          },
           theme: { color: "#E5B35C" },
-          
-          // 🧠 ADDED: STRICT UI CONFIGURATION TO FORCE UPI ONLY
           config: {
             display: {
               blocks: {
                 upi_only: {
                   name: 'Fast UPI Payment',
                   instruments: [
-                    { method: 'upi' }
+                    { 
+                      method: 'upi',
+                      flows: ['intent', 'collect', 'qr'] // 🌟 ENABLES DIRECT APP LAUNCH & UPI ID
+                    }
                   ]
                 }
               },
               sequence: ['block.upi_only'],
               preferences: {
-                show_default_blocks: false // 🚨 THIS IS THE KILL SWITCH
+                show_default_blocks: false
               }
             }
           }

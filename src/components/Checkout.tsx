@@ -190,7 +190,7 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
           amount: orderData.amount,
           currency: orderData.currency,
           name: "Your Order",
-          description: `Order for ${customerName}`,
+          description: `Order for ${customerName}`,          
           order_id: orderData.id,
           handler: async function () {
             toast.success("Payment successful!");
@@ -201,22 +201,19 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
             name: customerName 
           },
           theme: { color: "#E5B35C" },
+          
+          // 🧠 UPDATED: Use the 'hide' array instead of custom blocks
           config: {
             display: {
-              blocks: {
-                upi_only: {
-                  name: 'Fast UPI Payment',
-                  instruments: [
-                    { 
-                      method: 'upi',
-                      flows: ['intent', 'collect', 'qr'] // 🌟 ENABLES DIRECT APP LAUNCH & UPI ID
-                    }
-                  ]
-                }
-              },
-              sequence: ['block.upi_only'],
+              hide: [
+                { method: 'card' },
+                { method: 'netbanking' },
+                { method: 'wallet' },
+                { method: 'emi' },
+                { method: 'paylater' }
+              ],
               preferences: {
-                show_default_blocks: false
+                show_default_blocks: true // 👈 Turn native UI back on
               }
             }
           }

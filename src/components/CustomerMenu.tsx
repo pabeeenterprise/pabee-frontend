@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useCart } from '../context/CartContext';
 
 interface MenuItem {
@@ -38,7 +38,10 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   const [activeOrderToken] = useState(localStorage.getItem('activeOrderToken') || null);
   const [orderStatus, setOrderStatus] = useState(localStorage.getItem('activeOrderStatus') || 'pending');
 
-  // 🧠 THE 5-SECOND POLLING ENGINE
+  // 🚨 NEW: Prevents the alarm from looping forever
+  const hasRungRef = useRef(false);
+
+  // 🧠 THE 5-SECOND POLLING ENGINE & WAKE-UP SYNC
   useEffect(() => {
     if (!activeOrderId) return;
 
@@ -50,7 +53,7 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
           const data = await res.json();
           if (data.kitchenStatus) {
             setOrderStatus(data.kitchenStatus);
-            localStorage.setItem('activeOrderStatus', data.kitchenStatus); // Cache for refresh
+            localStorage.setItem('activeOrderStatus', data.kitchenStatus);
           }
         }
       } catch (err) {
@@ -58,10 +61,54 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
       }
     };
 
+    // 1. Check immediately on mount
     checkStatus();
+    
+    // 2. Start the standard 5-second loop for active screens
     const interval = setInterval(checkStatus, 5000);
-    return () => clearInterval(interval);
+
+    // 🚀 3. THE WAKE-UP TRIGGER: Fire instantly when the user unlocks their phone
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkStatus(); 
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // 4. Cleanup
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [activeOrderId]);
+
+  // 🚨 THE CUSTOMER WAKE-UP ALARM
+  useEffect(() => {
+    // If the order is ready, and we haven't already rung the bell...
+    if (orderStatus === 'completed' && !hasRungRef.current) {
+      
+      // 1. Attempt to play the sound
+      const alarm = new Audio('/bell.mp3');
+      alarm.play().catch((err) => {
+        // Browsers block audio if the user didn't interact with the screen recently
+        console.warn("Browser Auto-Play blocked the audio:", err);
+      });
+
+      // 2. Brute-force physical vibration (Android only, iOS blocks this for web)
+      // Vibrate pattern: 500ms on, 200ms off, 500ms on, 200ms off, 500ms on
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([500, 200, 500, 200, 500]);
+      }
+
+      // Lock the alarm so it doesn't trigger again on the next 5-second poll
+      hasRungRef.current = true;
+    }
+    
+    // Reset the lock if they start a brand new order
+    if (orderStatus === 'pending') {
+      hasRungRef.current = false;
+    }
+  }, [orderStatus]);
 
   useEffect(() => {
     const history = JSON.parse(localStorage.getItem('pabee_order_history') || '[]');

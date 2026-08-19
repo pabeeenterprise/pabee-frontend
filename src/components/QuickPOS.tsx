@@ -5,6 +5,7 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [posCart, setPosCart] = useState<any[]>([]);
   const [reference, setReference] = useState('');
+  const [phone, setPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 1. Fetch the menu for the POS buttons
@@ -36,6 +37,7 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
   const clearPos = () => {
     setPosCart([]);
     setReference('');
+    setPhone('');
   };
 
   const posTotal = posCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
@@ -49,7 +51,7 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
       vendorId,
       tableId: "Counter", // Flag this so you know it was a walk-up
       customerName: reference.trim() || "Counter Order",
-      customerPhone: "0000000000", // Dummy data to satisfy Prisma
+      customerPhone: phone.trim().length === 10 ? phone.trim() : "0000000000",
       paymentMode: paymentMode,
       total: posTotal,
       items: posCart.map(c => ({ name: c.name, qty: c.qty, price: c.price }))
@@ -107,6 +109,16 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
             placeholder="Identifier (e.g. Red Shirt) - Optional" 
             value={reference}
             onChange={(e) => setReference(e.target.value)}
+            className="w-full bg-[#1A1D24] text-xs text-white p-2.5 rounded-lg border border-gray-800 mb-3 outline-none focus:border-[#E5B35C]"
+          />
+
+          {/* 🌟 NEW PHONE NUMBER FIELD */}
+          <input 
+            type="tel" 
+            placeholder="Phone Number - Optional" 
+            value={phone}
+            onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} // Strips non-numbers
+            maxLength={10}
             className="w-full bg-[#1A1D24] text-xs text-white p-2.5 rounded-lg border border-gray-800 mb-3 outline-none focus:border-[#E5B35C]"
           />
 

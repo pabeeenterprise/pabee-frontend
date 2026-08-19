@@ -9,7 +9,8 @@ import OffersPromos from './OffersPromos';
 import MyQRCode from './MyQRCode';
 import Settings from './Settings';
 import BrandingStudio from './BrandingStudio';
-import PaymentSettings from './PaymentSettings'; // 👈 1. ADD THIS IMPORT
+import PaymentSettings from './PaymentSettings';
+import QuickPOS from './QuickPOS'; 
 
 export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorId: string }) {
   const { userId, isLoaded } = useAuth(); // Grab the real Google ID!
@@ -48,8 +49,22 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
         <main className="flex-1 overflow-y-auto w-full">
+
           {/* Your tools use the Prisma Database ID */}
-          {activeTab === 'live-orders' && <LiveOrders vendorId={realVendorId} />}
+          {activeTab === 'live-orders' && (
+            <div className="flex flex-col h-full overflow-y-auto w-full">
+              
+              {/* The Live Queue takes up the top section */}
+              <div className="flex-shrink-0">
+                <LiveOrders vendorId={realVendorId} />
+              </div>
+              
+              {/* ⚡ The Quick POS sits directly underneath it */}
+              <div className="px-4 md:px-8 pb-12 flex-shrink-0 max-w-5xl">
+                <QuickPOS vendorId={realVendorId} />
+              </div>
+            </div>
+          )}
           {activeTab === 'overview' && <Overview vendorId={realVendorId} />}
           {activeTab === 'menu-editor' && <MenuEditor vendorId={realVendorId} />}
           {activeTab === 'offers' && <OffersPromos vendorId={realVendorId} />}

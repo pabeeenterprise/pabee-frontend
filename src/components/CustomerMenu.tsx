@@ -30,7 +30,7 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   const [vendorProfile, setVendorProfile] = useState<VendorProfile | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
-  const { cart, addToCart, updateQty, cartCount, cartTotal } = useCart();
+  const { cart, addToCart, updateQty, cartCount, cartTotal, clearCart } = useCart();
   const [pastOrders, setPastOrders] = useState<any[]>([]);
 
   // 🧠 ACTIVE ORDER TRACKING STATES
@@ -60,6 +60,19 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
         console.error("Tracker polling failed");
       }
     };
+
+    // 🧠 SECURITY: PREVENT CROSS-RESTAURANT CART CONTAMINATION
+  useEffect(() => {
+    const lastVisitedVendor = localStorage.getItem('pabee_last_vendor');
+    
+    // If they just scanned a QR code for a NEW restaurant, nuke the old cart
+    if (lastVisitedVendor && lastVisitedVendor !== vendorId) {
+      clearCart();
+    }
+    
+    // Stamp the current restaurant into memory
+    localStorage.setItem('pabee_last_vendor', vendorId);
+  }, [vendorId, clearCart]);
 
     // 1. Check immediately on mount
     checkStatus();

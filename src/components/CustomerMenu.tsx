@@ -123,10 +123,13 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
     }
   }, [orderStatus]);
 
+  // 🧠 FILTER HISTORY FOR THIS SPECIFIC RESTAURANT
   useEffect(() => {
-    const history = JSON.parse(localStorage.getItem('pabee_order_history') || '[]');
-    setPastOrders(history);
-  }, []);
+    const rawHistory = JSON.parse(localStorage.getItem('pabee_order_history') || '[]');
+    // Only keep orders where the stamped vendorId matches the current page
+    const thisVendorHistory = rawHistory.filter((order: any) => order.vendorId === vendorId);
+    setPastOrders(thisVendorHistory);
+  }, [vendorId]);
   const [activePromo, setActivePromo] = useState<any | null>(null);
 
   // Trigger re-animation when category changes

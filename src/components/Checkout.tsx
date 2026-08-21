@@ -139,6 +139,7 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
         const orderData = await orderRes.json();
         const completedOrder = {
           id: orderData.id,
+          vendorId: vendorId,
           date: new Date().toISOString(),
           summary: cart.map(c => `${c.qty}x ${c.name}`).join(' • '), 
           total: finalTotal,

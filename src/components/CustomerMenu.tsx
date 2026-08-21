@@ -123,13 +123,24 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
     }
   }, [orderStatus]);
 
-  // 🧠 FILTER HISTORY FOR THIS SPECIFIC RESTAURANT
+  // 🧠 BULLETPROOF HISTORY FILTER
   useEffect(() => {
-    const rawHistory = JSON.parse(localStorage.getItem('pabee_order_history') || '[]');
-    // Only keep orders where the stamped vendorId matches the current page
-    const thisVendorHistory = rawHistory.filter((order: any) => order.vendorId === vendorId);
-    setPastOrders(thisVendorHistory);
+    try {
+      const rawData = localStorage.getItem('pabee_order_history');
+      const rawHistory = JSON.parse(rawData || '[]');
+      
+      // Safety Net: Force it to be an array even if the memory is corrupted
+      const safeHistory = Array.isArray(rawHistory) ? rawHistory : [];
+      
+      // Only keep orders where the stamped vendorId matches the current page
+      const thisVendorHistory = safeHistory.filter((order: any) => order.vendorId === vendorId);
+      setPastOrders(thisVendorHistory);
+    } catch (error) {
+      console.error("Corrupted history detected, wiping slate clean.", error);
+      setPastOrders([]); // Failsafe
+    }
   }, [vendorId]);
+  
   const [activePromo, setActivePromo] = useState<any | null>(null);
 
   // Trigger re-animation when category changes

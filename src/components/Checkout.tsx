@@ -199,12 +199,11 @@ export default function Checkout({ vendorId, tableId, onBack }: { vendorId: stri
           },
           prefill: { 
             contact: phone,
-            name: customerName,
-            method: 'upi' // 🚀 THIS SKIPS THE SELECTION SCREEN
+            name: customerName 
+            // 🚨 DELETED the aggressive method: 'upi' prefill that causes the blank screen
           },
           theme: { color: "#E5B35C" },
           
-          // Keep the safety 'hide' array just in case the customer hits 'Back' inside the modal
           config: {
             display: {
               hide: [

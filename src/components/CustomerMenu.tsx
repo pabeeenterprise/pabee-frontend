@@ -104,7 +104,7 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
       
       if (!alreadyRung) {
         try {
-          const alarm = new Audio('/bell.mp3');
+          const alarm = new Audio('/bell.wav');
           alarm.play().catch(e => console.warn("Audio blocked by browser", e));
           
           if (typeof navigator !== 'undefined' && navigator.vibrate) {

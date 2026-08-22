@@ -38,6 +38,19 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   const [activeOrderToken] = useState(localStorage.getItem('activeOrderToken') || null);
   const [orderStatus, setOrderStatus] = useState(localStorage.getItem('activeOrderStatus') || 'pending');
 
+  // 🧠 SECURITY: PREVENT CROSS-RESTAURANT CART CONTAMINATION (Moved OUTSIDE)
+  useEffect(() => {
+    const lastVisitedVendor = localStorage.getItem('pabee_last_vendor');
+    
+    // If they just scanned a QR code for a NEW restaurant, nuke the old cart
+    if (lastVisitedVendor && lastVisitedVendor !== vendorId) {
+      clearCart();
+    }
+    
+    // Stamp the current restaurant into memory
+    localStorage.setItem('pabee_last_vendor', vendorId);
+  }, [vendorId, clearCart]);
+
   // 🧠 THE 5-SECOND POLLING ENGINE & WAKE-UP SYNC
   useEffect(() => {
     if (!activeOrderId) return;
@@ -57,19 +70,6 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
         console.error("Tracker polling failed");
       }
     };
-
-    // 🧠 SECURITY: PREVENT CROSS-RESTAURANT CART CONTAMINATION
-  useEffect(() => {
-    const lastVisitedVendor = localStorage.getItem('pabee_last_vendor');
-    
-    // If they just scanned a QR code for a NEW restaurant, nuke the old cart
-    if (lastVisitedVendor && lastVisitedVendor !== vendorId) {
-      clearCart();
-    }
-    
-    // Stamp the current restaurant into memory
-    localStorage.setItem('pabee_last_vendor', vendorId);
-  }, [vendorId, clearCart]);
 
     // 1. Check immediately on mount
     checkStatus();

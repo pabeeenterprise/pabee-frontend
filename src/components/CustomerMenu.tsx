@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 
 interface MenuItem {
@@ -37,9 +37,6 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
   const [activeOrderId, setActiveOrderId] = useState(localStorage.getItem('activeOrderId') || null);
   const [activeOrderToken] = useState(localStorage.getItem('activeOrderToken') || null);
   const [orderStatus, setOrderStatus] = useState(localStorage.getItem('activeOrderStatus') || 'pending');
-
-  // 🚨 NEW: Prevents the alarm from looping forever
-  const hasRungRef = useRef(false);
 
   // 🧠 THE 5-SECOND POLLING ENGINE & WAKE-UP SYNC
   useEffect(() => {
@@ -95,33 +92,33 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
     };
   }, [activeOrderId]);
 
-  // 🚨 THE CUSTOMER WAKE-UP ALARM
+  // 🚀 BULLETPROOF CUSTOMER WAKE-UP ALARM
   useEffect(() => {
-    // If the order is ready, and we haven't already rung the bell...
-    if (orderStatus === 'completed' && !hasRungRef.current) {
-      
-      // 1. Attempt to play the sound
-      const alarm = new Audio('/bell.mp3');
-      alarm.play().catch((err) => {
-        // Browsers block audio if the user didn't interact with the screen recently
-        console.warn("Browser Auto-Play blocked the audio:", err);
-      });
-
-      // 2. Brute-force physical vibration (Android only, iOS blocks this for web)
-      // Vibrate pattern: 500ms on, 200ms off, 500ms on, 200ms off, 500ms on
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([500, 200, 500, 200, 500]);
-      }
-
-      // Lock the alarm so it doesn't trigger again on the next 5-second poll
-      hasRungRef.current = true;
-    }
+    if (!activeOrderId) return;
     
-    // Reset the lock if they start a brand new order
-    if (orderStatus === 'pending') {
-      hasRungRef.current = false;
+    // Create a unique lock key for this specific order
+    const ringKey = `pabee_rung_${activeOrderId}`;
+
+    if (orderStatus === 'completed') {
+      const alreadyRung = localStorage.getItem(ringKey);
+      
+      if (!alreadyRung) {
+        try {
+          const alarm = new Audio('/bell.mp3');
+          alarm.play().catch(e => console.warn("Audio blocked by browser", e));
+          
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate([500, 200, 500, 200, 500]);
+          }
+          
+          // Permanently lock the alarm for this specific order ID
+          localStorage.setItem(ringKey, 'true'); 
+        } catch (err) {
+          console.error("Alarm execution failed", err);
+        }
+      }
     }
-  }, [orderStatus]);
+  }, [orderStatus, activeOrderId]);
 
   // 🧠 BULLETPROOF HISTORY FILTER
   useEffect(() => {
@@ -140,7 +137,7 @@ export default function CustomerMenu({ vendorId, onGoToCheckout }: { vendorId: s
       setPastOrders([]); // Failsafe
     }
   }, [vendorId]);
-  
+
   const [activePromo, setActivePromo] = useState<any | null>(null);
 
   // Trigger re-animation when category changes

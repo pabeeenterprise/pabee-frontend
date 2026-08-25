@@ -34,6 +34,20 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
     });
   };
 
+  const removeFromPos = (itemId: string) => {
+    setPosCart(prev => {
+      const existing = prev.find(i => i.id === itemId);
+      if (!existing) return prev;
+      
+      // If there's only 1 left, nuke it from the cart entirely
+      if (existing.qty === 1) {
+        return prev.filter(i => i.id !== itemId);
+      }
+      // Otherwise, just subtract 1
+      return prev.map(i => i.id === itemId ? { ...i, qty: i.qty - 1 } : i);
+    });
+  };
+
   const clearPos = () => {
     setPosCart([]);
     setReference('');
@@ -122,14 +136,27 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
             className="w-full bg-[#1A1D24] text-xs text-white p-2.5 rounded-lg border border-gray-800 mb-3 outline-none focus:border-[#E5B35C]"
           />
 
-          <div className="flex-1 overflow-y-auto min-h-[100px] mb-3 space-y-2">
+          <div className="flex-1 overflow-y-auto min-h-[100px] mb-3 space-y-2 no-scrollbar pr-1">
             {posCart.length === 0 ? (
-              <p className="text-gray-600 text-xs text-center mt-4">No items added</p>
+              <p className="text-gray-600 text-xs text-center mt-4 uppercase tracking-widest font-bold">Cart is empty</p>
             ) : (
               posCart.map((item, idx) => (
-                <div key={idx} className="flex justify-between text-xs text-gray-300">
-                  <span>{item.qty}x {item.name}</span>
-                  <span>₹{item.price * item.qty}</span>
+                <div key={idx} className="flex justify-between items-center text-xs text-gray-300 bg-[#1A1D24] p-2 rounded-lg border border-gray-800/50">
+                  
+                  {/* Left Side: Controls & Name */}
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => removeFromPos(item.id)}
+                      className="w-6 h-6 bg-red-900/30 text-red-500 rounded flex items-center justify-center font-bold text-lg active:scale-90 transition-transform border border-red-900/50 hover:bg-red-900/50"
+                    >
+                      −
+                    </button>
+                    <span className="font-bold text-[#E5B35C] w-4">{item.qty}x</span>
+                    <span className="font-medium line-clamp-1">{item.name}</span>
+                  </div>
+
+                  {/* Right Side: Price */}
+                  <span className="font-bold">₹{item.price * item.qty}</span>
                 </div>
               ))
             )}

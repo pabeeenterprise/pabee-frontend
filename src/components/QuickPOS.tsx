@@ -7,22 +7,33 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
   const [reference, setReference] = useState('');
   const [phone, setPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activePromo, setActivePromo] = useState<any | null>(null);
+  const [applyDiscount, setApplyDiscount] = useState(false); // The toggle switch
 
-  // 1. Fetch the menu for the POS buttons
+  // 1. Fetch the menu & promos
   useEffect(() => {
-    const fetchMenu = async () => {
+    const fetchData = async () => {
       const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
       try {
-        const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`);
-        if (res.ok) {
-          const data = await res.json();
+        // Fetch Menu
+        const menuRes = await fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`);
+        if (menuRes.ok) {
+          const data = await menuRes.json();
           setMenuItems(data.items || []);
         }
+        
+        // 🚀 Fetch Promos
+        const promoRes = await fetch(`${API_URL}/api/vendors/${vendorId}/promos`);
+        if (promoRes.ok) {
+          const promoData = await promoRes.json();
+          const active = promoData.promos?.find((p: any) => p.isActive);
+          if (active) setActivePromo(active);
+        }
       } catch (err) {
-        console.error("POS Menu fetch failed", err);
+        console.error("POS Data fetch failed", err);
       }
     };
-    fetchMenu();
+    fetchData();
   }, [vendorId]);
 
   // 2. POS Cart Logic
@@ -54,7 +65,24 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
     setPhone('');
   };
 
-  const posTotal = posCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  // 🧠 SMART CART MATH
+  const rawTotal = posCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  let finalTotal = rawTotal;
+  let discountAmt = 0;
+
+  // Only apply if toggle is on, promo exists, and cart meets minimum value
+  if (applyDiscount && activePromo && rawTotal >= activePromo.minOrderValue) {
+    discountAmt = activePromo.type === 'FLAT' 
+      ? activePromo.value 
+      : (rawTotal * activePromo.value) / 100;
+    finalTotal = Math.max(0, rawTotal - discountAmt);
+  }
+
+  // Clear the discount toggle when the cart is emptied
+  const handleClearPos = () => {
+    clearPos();
+    setApplyDiscount(false);
+  };
 
   // 3. The API Hijack (Reusing your Checkout logic)
   const submitManualOrder = async (paymentMode: 'CASH' | 'UPI') => {
@@ -67,7 +95,7 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
       customerName: reference.trim() || "Counter Order",
       customerPhone: phone.trim().length === 10 ? phone.trim() : "0000000000",
       paymentMode: paymentMode,
-      total: posTotal,
+      total: finalTotal,
       items: posCart.map(c => ({ name: c.name, qty: c.qty, price: c.price }))
     };
 
@@ -162,6 +190,23 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
             )}
           </div>
 
+            {/* 🚀 THE DISCOUNT TOGGLE */}
+          {activePromo && rawTotal >= activePromo.minOrderValue && (
+            <div 
+              onClick={() => setApplyDiscount(!applyDiscount)}
+              className="flex justify-between items-center bg-[#1A1D24] p-2.5 rounded-lg border border-gray-800 mb-3 cursor-pointer hover:border-gray-700 transition-colors"
+            >
+              <span className="text-[11px] font-bold text-[#E5B35C] tracking-wide uppercase">
+                Apply {activePromo.code}
+              </span>
+              
+              {/* iOS Style Switch */}
+              <div className={`w-8 h-4 rounded-full flex items-center p-0.5 transition-colors duration-300 ${applyDiscount ? 'bg-green-500' : 'bg-gray-700'}`}>
+                <div className={`w-3 h-3 bg-white rounded-full shadow-sm transform transition-transform duration-300 ${applyDiscount ? 'translate-x-4' : ''}`}></div>
+              </div>
+            </div>
+          )}
+
           <div className="border-t border-gray-800 pt-3 mb-4 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">Total</span>
@@ -169,7 +214,7 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
               {/* 🚨 THE CLEAR ALL KILL-SWITCH */}
               {posCart.length > 0 && (
                 <button 
-                  onClick={clearPos}
+                  onClick={handleClearPos} 
                   className="bg-red-900/20 text-red-500 text-[10px] font-bold uppercase px-2 py-1 rounded border border-red-900/50 hover:bg-red-900/40 active:scale-95 transition-all"
                 >
                   Clear Cart
@@ -177,7 +222,13 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
               )}
             </div>
             
-            <span className="text-[#E5B35C] text-xl font-black">₹{posTotal}</span>
+            {/* 🚨 THE SMART TOTAL DISPLAY */}
+            <div className="text-right">
+              {applyDiscount && activePromo && rawTotal >= activePromo.minOrderValue && (
+                 <span className="text-gray-500 text-xs line-through mr-2">₹{rawTotal}</span>
+              )}
+              <span className="text-[#E5B35C] text-xl font-black">₹{finalTotal}</span>
+            </div>
           </div>
 
           <div className="flex gap-2">

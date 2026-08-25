@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react'; 
-import toast from 'react-hot-toast'; // 👈 1. Added toast for success/error messages
+import toast from 'react-hot-toast';
 
 interface OrderItem {
   id: string;
@@ -8,7 +8,6 @@ interface OrderItem {
   qty: number;
 }
 
-// 👈 2. Updated Interface to include table and phone data for the UI
 interface Order {
   id: string;
   createdAt: string;
@@ -51,7 +50,6 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
     return () => clearInterval(interval);
   }, [vendorId]);
 
-  // 👈 3. Secured Verification Function with Clerk Token
   const handleVerifyPayment = async (orderId: string) => {
     try {
       const token = await getToken();
@@ -61,7 +59,7 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` 
         },
-        body: JSON.stringify({ status: 'preparing' }) // Moves it directly to prep
+        body: JSON.stringify({ status: 'preparing' })
       });
 
       if (res.ok) {
@@ -92,107 +90,125 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
     }
   };
 
-  if (loading) return <div className="text-gray-400 p-8 animate-pulse">Loading kitchen queue...</div>;
+  if (loading) return <div className="text-gray-400 p-8 animate-pulse font-bold tracking-widest uppercase">Loading Live Kitchen...</div>;
 
-  // 👈 4. Separate the queues logically
+  // 🧠 PRIORITY SORTING: Force UPI Verifications to the absolute top of the grid
   const unverifiedUpiOrders = orders.filter(o => o.kitchenStatus === 'pending' && o.paymentMode === 'UPI');
   const standardOrders = orders.filter(o => !(o.kitchenStatus === 'pending' && o.paymentMode === 'UPI'));
+  const displayOrders = [...unverifiedUpiOrders, ...standardOrders];
+
+  // 🧠 DYNAMIC UI ENGINE: Maps backend status to frontend styles and button actions
+  const getCardConfig = (order: Order) => {
+    // 1. UPI Needs Verification (RED)
+    if (order.kitchenStatus === 'pending' && order.paymentMode === 'UPI') {
+      return {
+        statusLabel: 'Verify Payment',
+        color: 'border-red-500', bg: 'bg-red-500/10', text: 'text-red-500',
+        icon: '⚠️', btnLabel: 'Verify & Send to Kitchen',
+        action: () => handleVerifyPayment(order.id)
+      };
+    }
+    // 2. New Order (BLUE)
+    if (order.kitchenStatus === 'pending') {
+      return {
+        statusLabel: 'New Order',
+        color: 'border-blue-500', bg: 'bg-blue-500/10', text: 'text-blue-500',
+        icon: '🔥', btnLabel: 'Start Prep',
+        action: () => updateStatus(order.id, 'preparing')
+      };
+    }
+    // 3. Preparing (GOLD)
+    return {
+      statusLabel: 'Preparing',
+      color: 'border-[#E5B35C]', bg: 'bg-[#E5B35C]/10', text: 'text-[#E5B35C]',
+      icon: '✅', btnLabel: 'Mark Ready',
+      action: () => updateStatus(order.id, 'completed')
+    };
+  };
 
   return (
-    <div className="flex flex-col gap-4 max-w-5xl">
-      <h2 className="text-sm font-bold text-gray-500 tracking-wider mb-2 uppercase">Live Order Queue</h2>
-      
-      {/* ⚠️ PENDING PAYMENT VERIFICATION QUEUE */}
-      {unverifiedUpiOrders.length > 0 && (
-        <div className="mb-6 p-4 bg-red-900/20 border border-red-500/50 rounded-2xl shadow-lg">
-          <h2 className="text-red-400 font-bold mb-4 flex items-center gap-2">
-            <span>⚠️</span> Action Required: Verify UPI Payments
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {unverifiedUpiOrders.map(order => (
-              <div key={order.id} className="bg-[#13161F] border border-red-500/30 rounded-xl p-4 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
-                
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <p className="text-xl font-bold text-white">
-                    <span className="text-[#E5B35C] mr-2">#{order.token}</span> {order.customerName}
-                    </p>
-                    <p className="text-xs text-gray-500">{order.customerPhone}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[#E5B35C] font-bold text-lg">₹{order.total}</p>
-                    <p className="text-[10px] uppercase bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full mt-1">UPI Declared</p>
-                  </div>
-                </div>
-
-                <div className="text-sm text-gray-400 mb-4 bg-[#0B0E14] p-2 rounded-lg">
-                  {order.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between">
-                      <span>{item.qty}x {item.name}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <button 
-                  onClick={() => handleVerifyPayment(order.id)}
-                  className="w-full bg-green-600 text-white font-bold py-2.5 rounded-lg hover:bg-green-700 transition-colors shadow-md"
-                >
-                  ✓ Verify Screen & Send to Kitchen
-                </button>
-              </div>
-            ))}
-          </div>
+    <div className="flex flex-col w-full h-full">
+      <div className="flex justify-between items-end mb-6 pb-2 border-b border-gray-800">
+        <div>
+          <h2 className="text-2xl font-black text-white tracking-tight">Live Kitchen Queue</h2>
+          <p className="text-sm text-gray-500 mt-1">{displayOrders.length} Active Tickets</p>
         </div>
-      )}
+      </div>
 
-      {/* STANDARD KITCHEN QUEUE */}
-      {standardOrders.length === 0 ? (
-        <div className="bg-[#13161F] border border-[#1F2330] rounded-xl p-8 text-center text-gray-500">
-          No active tickets. Kitchen is clear!
+      {displayOrders.length === 0 ? (
+        <div className="bg-[#13161F] border border-[#1F2330] rounded-2xl p-12 text-center text-gray-500 shadow-inner flex flex-col items-center">
+          <span className="text-4xl mb-4 opacity-50">🍃</span>
+          <span className="font-bold tracking-widest uppercase">Kitchen is Clear</span>
         </div>
       ) : (
-        standardOrders.map((order) => (
-          <div key={order.id} className="bg-[#13161F] border border-[#1F2330] rounded-xl p-5 flex flex-col md:flex-row justify-between md:items-center gap-4 shadow-sm">
-            
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-              <h3 className="text-xl font-serif text-white flex items-center">
-              <span className="text-[#E5B35C] font-bold mr-2 text-2xl">#{order.token}</span> 
-              <span className="text-gray-300">• {order.customerName}</span>
-              </h3>
-                {order.kitchenStatus === 'pending' && <span className="bg-[#3D2C1D] text-[#E5B35C] px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-[#E5B35C]/30">New</span>}
-              </div>
-              <p className="text-xs text-gray-500 mb-3">Just now • {order.paymentMode}</p>
-              
-              <div className="text-gray-300 text-sm">
-                {order.items.map(item => (
-                  <span key={item.id}>{item.name} <span className="text-gray-500">x{item.qty}</span>{', '}</span>
-                ))}
-              </div>
-              <div className="text-[#E5B35C] font-bold mt-2 text-lg">₹{order.total}</div>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 auto-rows-max pb-12">
+          {displayOrders.map((order) => {
+            const config = getCardConfig(order);
+            const orderTime = new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            <div className="flex gap-3 mt-4 md:mt-0">
-              {order.kitchenStatus === 'pending' ? (
-                <button 
-                  onClick={() => updateStatus(order.id, 'preparing')}
-                  className="px-5 py-2 bg-[#E5B35C]/10 border border-[#E5B35C]/50 text-[#E5B35C] rounded-lg text-sm hover:bg-[#E5B35C] hover:text-[#0B0E14] transition-all font-bold shadow-md"
-                >
-                  Start prep
-                </button>
-              ) : (
-                <button 
-                  onClick={() => updateStatus(order.id, 'completed')}
-                  className="px-6 py-2 bg-[#1C3A27] text-[#4ADE80] border border-[#4ADE80]/30 rounded-lg text-sm hover:bg-[#254f35] transition-colors font-bold tracking-wide"
-                >
-                  Mark Ready
-                </button>
-              )}
-            </div>
-            
-          </div>
-        ))
+            return (
+              <div 
+                key={order.id} 
+                className={`bg-[#13161F] rounded-2xl border-l-4 ${config.color} border-y border-r border-[#1F2330] p-4 shadow-lg flex flex-col h-full transition-all relative overflow-hidden`}
+              >
+                {/* Subtle background glow based on status */}
+                <div className={`absolute top-0 right-0 w-32 h-32 ${config.bg} rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none`}></div>
+
+                {/* Top Row: Context & Time */}
+                <div className="flex justify-between items-start relative z-10 mb-2">
+                  <div>
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${config.text}`}>
+                      {config.statusLabel}
+                    </span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-3xl font-black text-white">#{order.token}</span>
+                      {order.tableId && order.tableId !== "Counter" && (
+                        <span className="text-[10px] uppercase font-bold bg-[#0B0E14] text-gray-400 px-2 py-1 rounded-md">
+                          {order.tableId}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right flex flex-col items-end">
+                     <span className="text-[#E5B35C] font-black text-xl">₹{order.total}</span>
+                     <span className="text-xs text-gray-500">{orderTime}</span>
+                  </div>
+                </div>
+
+                {/* Customer Data */}
+                <div className="relative z-10 mb-3 border-b border-gray-800/50 pb-2">
+                  <span className="text-sm font-bold text-gray-300">{order.customerName}</span>
+                  {order.customerPhone && order.customerPhone !== "0000000000" && (
+                    <span className="text-xs text-gray-500 ml-2">({order.customerPhone})</span>
+                  )}
+                </div>
+
+                {/* Middle Row: The Food */}
+                <div className="relative z-10 flex-grow mb-5">
+                  <div className="flex flex-col gap-1.5">
+                    {order.items.map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-start text-sm">
+                        <span className="font-medium text-gray-200 pr-4">{item.name}</span>
+                        <span className="font-black text-gray-500">x{item.qty}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Bottom Row: The Single Contextual Action Button */}
+                <div className="mt-auto relative z-10">
+                  <button 
+                    onClick={config.action}
+                    className={`w-full py-3.5 rounded-xl font-bold text-sm flex justify-center items-center gap-2 transition-transform active:scale-95 ${config.bg} ${config.text} border border-current/20 hover:brightness-125`}
+                  >
+                    <span>{config.icon}</span> {config.btnLabel}
+                  </button>
+                </div>
+
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

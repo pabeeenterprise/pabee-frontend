@@ -163,7 +163,20 @@ export default function QuickPOS({ vendorId }: { vendorId: string }) {
           </div>
 
           <div className="border-t border-gray-800 pt-3 mb-4 flex justify-between items-center">
-            <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">Total</span>
+            <div className="flex items-center gap-3">
+              <span className="text-gray-400 text-xs font-bold uppercase tracking-widest">Total</span>
+              
+              {/* 🚨 THE CLEAR ALL KILL-SWITCH */}
+              {posCart.length > 0 && (
+                <button 
+                  onClick={clearPos}
+                  className="bg-red-900/20 text-red-500 text-[10px] font-bold uppercase px-2 py-1 rounded border border-red-900/50 hover:bg-red-900/40 active:scale-95 transition-all"
+                >
+                  Clear Cart
+                </button>
+              )}
+            </div>
+            
             <span className="text-[#E5B35C] text-xl font-black">₹{posTotal}</span>
           </div>
 

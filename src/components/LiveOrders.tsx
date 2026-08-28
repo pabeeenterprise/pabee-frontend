@@ -2,105 +2,142 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react'; 
 import toast from 'react-hot-toast';
 
-interface OrderItem {
-  id: string;
-  name: string;
-  qty: number;
-}
-
-interface Order {
-  id: string;
-  createdAt: string;
-  paymentMode: string;
-  kitchenStatus: 'pending' | 'preparing' | 'completed' | 'cancelled';
-  total: number;
-  token: number;
-  tableId?: string;    
-  customerName: string;   
-  customerPhone?: string; 
-  items: OrderItem[];
-}
+interface OrderItem { id: string; name: string; qty: number; price: number; }
+interface Order { id: string; createdAt: string; paymentMode: string; kitchenStatus: string; total: number; token: number; tableId?: string; customerName: string; customerPhone?: string; items: OrderItem[]; }
+interface MenuItem { id: string; name: string; price: number; category: string; }
 
 export default function LiveOrders({ vendorId }: { vendorId: string }) {
+  // --- KITCHEN STATES ---
   const [orders, setOrders] = useState<Order[]>([]);
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  // 🚀 THE FULL-SCREEN MODAL STATE
   const [expandedSegment, setExpandedSegment] = useState<'NEW' | 'PREP' | 'HISTORY' | null>(null);
-  
-  const { getToken } = useAuth();
+  const [loading, setLoading] = useState(true);
 
-  const fetchOrders = async () => {
+  // --- POS STATES ---
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [posCart, setPosCart] = useState<OrderItem[]>([]);
+  const [reference, setReference] = useState('');
+  const [phone, setPhone] = useState('');
+  const [activePromo, setActivePromo] = useState<any | null>(null);
+  const [applyDiscount, setApplyDiscount] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { getToken } = useAuth();
+  const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
+
+  // 🧠 1. FETCH ALL DATA
+  const fetchData = async () => {
     try {
       const token = await getToken(); 
-      const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
+      const headers = { 'Authorization': `Bearer ${token}` };
       
-      const liveRes = await fetch(`${API_URL}/api/vendors/${vendorId}/kitchen-queue`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      const histRes = await fetch(`${API_URL}/api/vendors/${vendorId}/sales`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      // Fetch KDS
+      const liveRes = await fetch(`${API_URL}/api/vendors/${vendorId}/kitchen-queue`, { headers });
+      const histRes = await fetch(`${API_URL}/api/vendors/${vendorId}/sales`, { headers });
+      if (liveRes.ok) setOrders((await liveRes.json()).orders);
+      if (histRes.ok) setHistoryOrders((await histRes.json()).orders);
 
-      if (liveRes.ok && histRes.ok) {
-        const liveData = await liveRes.json();
-        const histData = await histRes.json();
-        setOrders(liveData.orders);
-        setHistoryOrders(histData.orders);
+      // Fetch POS Data (Only needed once, but safe here)
+      if (menuItems.length === 0) {
+        const menuRes = await fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`, { headers });
+        const promoRes = await fetch(`${API_URL}/api/vendors/${vendorId}/promos`, { headers });
+        if (menuRes.ok) setMenuItems((await menuRes.json()).items || []);
+        if (promoRes.ok) {
+          const promoData = await promoRes.json();
+          setActivePromo(promoData.promos?.find((p: any) => p.isActive) || null);
+        }
       }
     } catch (err) {
-      console.error("Fetch failed", err);
+      console.error("Data sync failed", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 10000);
+    fetchData();
+    const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
   }, [vendorId]);
 
-  const updateStatus = async (orderId: string, status: string, isPaymentVerification = false) => {
-    try {
-      const token = await getToken(); 
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/orders/${orderId}/kitchen-status`, {
-        method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ status })
-      });
-      
-      if (res.ok) {
-        if (isPaymentVerification) toast.success("Payment verified & cooking started!");
-        if (status === 'completed') toast.success("Order Ready!");
-        if (status === 'cancelled') toast.error("Order Cancelled.");
-        fetchOrders(); 
-      }
-    } catch (err) {
-      toast.error("Network error");
-    }
+  // 🧠 2. POS LOGIC
+  const filteredMenu = menuItems.filter(item => 
+    item.name.toLowerCase().startsWith(searchTerm.toLowerCase())
+  );
+
+  const addToPos = (item: MenuItem) => {
+    setPosCart(prev => {
+      const existing = prev.find(i => i.id === item.id);
+      if (existing) return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, { ...item, qty: 1 }];
+    });
   };
 
-  if (loading) return <div className="text-gray-400 p-8 animate-pulse font-bold tracking-widest uppercase">Loading Static Grid...</div>;
+  const removeFromPos = (itemId: string) => {
+    setPosCart(prev => {
+      const existing = prev.find(i => i.id === itemId);
+      if (!existing) return prev;
+      if (existing.qty === 1) return prev.filter(i => i.id !== itemId);
+      return prev.map(i => i.id === itemId ? { ...i, qty: i.qty - 1 } : i);
+    });
+  };
 
-  // 🧠 SEGMENT SORTING
-  const newOrders = orders.filter(o => o.kitchenStatus === 'pending');
-  const prepOrders = orders.filter(o => o.kitchenStatus === 'preparing');
-  const completedOrders = historyOrders; // From the sales endpoint
+  const rawTotal = posCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  let finalTotal = rawTotal;
+  if (applyDiscount && activePromo && rawTotal >= activePromo.minOrderValue) {
+    const discountAmt = activePromo.type === 'FLAT' ? activePromo.value : (rawTotal * activePromo.value) / 100;
+    finalTotal = Math.max(0, rawTotal - discountAmt);
+  }
 
-  // 🎨 COMPACT CARD RENDERER (Built specifically to prevent scrolling)
+  const handleClearPos = () => { setPosCart([]); setReference(''); setPhone(''); setApplyDiscount(false); };
+
+  const submitManualOrder = async (paymentMode: 'CASH' | 'UPI') => {
+    if (posCart.length === 0) return toast.error("Cart is empty!");
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId, tableId: "Counter", customerName: reference.trim() || "Counter Order",
+          customerPhone: phone.trim().length === 10 ? phone.trim() : "0000000000",
+          paymentMode, total: finalTotal, items: posCart.map(c => ({ name: c.name, qty: c.qty, price: c.price }))
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(`Token #${data.tokenNumber} Created!`);
+        handleClearPos();
+        fetchData(); // 🚀 INSTANTLY UPDATES THE KDS GRID ON THE RIGHT
+      }
+    } catch (err) { toast.error("Checkout failed"); } 
+    finally { setIsSubmitting(false); }
+  };
+
+  // 🧠 3. KITCHEN LOGIC
+  const updateStatus = async (orderId: string, status: string, isVerify = false) => {
+    try {
+      const token = await getToken(); 
+      const res = await fetch(`${API_URL}/api/orders/${orderId}/kitchen-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        if (isVerify) toast.success("Payment verified!");
+        else if (status === 'completed') toast.success("Order Ready!");
+        else if (status === 'cancelled') toast.error("Order Cancelled.");
+        fetchData(); 
+      }
+    } catch (err) { toast.error("Update failed"); }
+  };
+
+  // 🎨 COMPACT CARD RENDERER FOR KDS
   const renderCard = (order: Order, segment: 'NEW' | 'PREP' | 'HISTORY') => {
     const time = new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
     return (
       <div key={order.id} className="bg-[#13161F] border border-[#1F2330] rounded-xl p-3 flex flex-col justify-between shadow-md h-full relative overflow-hidden">
-        
-        {/* Top: Token & Info */}
         <div className="flex justify-between items-start mb-2 border-b border-gray-800/50 pb-2">
           <div>
             <span className="text-2xl font-black text-white leading-none">#{order.token}</span>
@@ -111,8 +148,6 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
             <p className="text-[9px] text-gray-500">{time}</p>
           </div>
         </div>
-
-        {/* Middle: Items (Truncated to fit static height) */}
         <div className="flex-1 overflow-hidden min-h-[40px]">
           {order.items.slice(0, 2).map((item, idx) => (
             <div key={idx} className="flex justify-between text-xs text-gray-300">
@@ -120,145 +155,182 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
               <span className="font-bold text-gray-500">x{item.qty}</span>
             </div>
           ))}
-          {order.items.length > 2 && <span className="text-[10px] text-gray-600 italic">+{order.items.length - 2} more items...</span>}
+          {order.items.length > 2 && <span className="text-[10px] text-gray-600 italic">+{order.items.length - 2} more...</span>}
         </div>
-
-        {/* Bottom: Segment-Specific Actions */}
         <div className="mt-2 pt-2 border-t border-gray-800/50">
           {segment === 'NEW' && (
             <button onClick={() => updateStatus(order.id, 'preparing', order.paymentMode === 'UPI')} className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors">
               Start Preparation
             </button>
           )}
-          
           {segment === 'PREP' && (
             <div className="flex gap-2">
-              <button onClick={() => updateStatus(order.id, 'cancelled')} className="w-1/3 py-2 bg-red-900/40 hover:bg-red-900 text-red-500 text-xs font-bold rounded-lg transition-colors">
-                Cancel
-              </button>
-              <button onClick={() => updateStatus(order.id, 'completed')} className="w-2/3 py-2 bg-[#E5B35C] hover:bg-yellow-400 text-black text-xs font-bold rounded-lg transition-colors">
-                Mark Ready
-              </button>
+              <button onClick={() => updateStatus(order.id, 'cancelled')} className="w-1/3 py-2 bg-red-900/40 hover:bg-red-900 text-red-500 text-xs font-bold rounded-lg transition-colors">Cancel</button>
+              <button onClick={() => updateStatus(order.id, 'completed')} className="w-2/3 py-2 bg-[#E5B35C] hover:bg-yellow-400 text-black text-xs font-bold rounded-lg transition-colors">Mark Ready</button>
             </div>
           )}
-
           {segment === 'HISTORY' && (
-            <div className="w-full py-2 bg-gray-800 text-gray-400 text-xs font-bold rounded-lg text-center cursor-default">
-              Completed
-            </div>
+            <div className="w-full py-2 bg-gray-800 text-gray-400 text-xs font-bold rounded-lg text-center cursor-default">Completed</div>
           )}
         </div>
       </div>
     );
   };
 
-  // 🚀 FULL SCREEN MODAL RENDERER
-  const renderModal = () => {
-    if (!expandedSegment) return null;
-    
-    let activeData: Order[] = [];
-    let title = "";
-    
-    if (expandedSegment === 'NEW') { activeData = newOrders; title = "All New Orders"; }
-    if (expandedSegment === 'PREP') { activeData = prepOrders; title = "All Preparing Orders"; }
-    if (expandedSegment === 'HISTORY') { activeData = completedOrders; title = "Today's History"; }
+  if (loading) return <div className="text-gray-400 p-8 font-bold tracking-widest uppercase">Loading Terminal...</div>;
 
-    return (
-      <div className="fixed inset-0 bg-[#0B0E14] z-50 flex flex-col p-6 animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-800">
-          <h2 className="text-3xl font-black text-white">{title} ({activeData.length})</h2>
-          <button onClick={() => setExpandedSegment(null)} className="w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full font-black text-xl flex items-center justify-center shadow-lg transition-transform active:scale-90">
-            ✕
-          </button>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto pb-20">
-          {activeData.map(order => renderCard(order, expandedSegment))}
-        </div>
-      </div>
-    );
-  };
+  const newOrders = orders.filter(o => o.kitchenStatus === 'pending');
+  const prepOrders = orders.filter(o => o.kitchenStatus === 'preparing');
 
   return (
-    <div className="h-screen w-full bg-[#0B0E14] flex flex-col overflow-hidden p-4">
-      {renderModal()}
+    <div className="h-screen w-full bg-[#0B0E14] flex gap-4 overflow-hidden p-4">
+      
+      {/* 🚀 LEFT COLUMN: THE NEW QUICK POS */}
+      <div className="w-80 shrink-0 bg-[#0A0C10] border border-gray-800/40 rounded-2xl p-4 flex flex-col h-full relative">
+        <h2 className="text-white font-black text-lg mb-4 flex items-center gap-2">
+          <span>⚡</span> New Walk-Up
+        </h2>
 
-      {/* HEADER */}
-      <div className="shrink-0 mb-4 pb-2 border-b border-gray-800 flex justify-between items-end">
-        <h1 className="text-xl font-black text-white tracking-tight">Static KDS</h1>
-        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{orders.length + historyOrders.length} Total Today</span>
+        {/* 🚨 THE FLOATING AUTOCOMPLETE SEARCH */}
+        <div className="relative mb-3 z-50">
+          <input 
+            type="text" 
+            placeholder="🔍 Search dish (e.g. 'T')..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-[#1A1D24] text-sm text-white p-3 rounded-lg border border-gray-800 outline-none focus:border-[#E5B35C] shadow-inner"
+          />
+          {searchTerm && (
+            <div className="absolute top-full left-0 w-full mt-1 bg-[#13161F] border border-gray-700 rounded-lg shadow-2xl max-h-48 overflow-y-auto no-scrollbar">
+              {filteredMenu.length === 0 ? (
+                <div className="p-3 text-xs text-gray-500 font-bold uppercase tracking-widest">No match found</div>
+              ) : (
+                filteredMenu.map(item => (
+                  <button 
+                    key={item.id}
+                    onClick={() => { addToPos(item); setSearchTerm(''); }}
+                    className="w-full text-left p-3 border-b border-gray-800/50 hover:bg-gray-800 flex justify-between items-center transition-colors"
+                  >
+                    <span className="text-sm font-bold text-gray-200 truncate pr-2">{item.name}</span>
+                    <span className="text-xs text-[#E5B35C] font-mono shrink-0">₹{item.price}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        <input type="text" placeholder="Identifier (e.g. Red Shirt)" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full bg-[#1A1D24] text-xs text-white p-2.5 rounded-lg border border-gray-800 mb-2 outline-none focus:border-[#E5B35C]" />
+        <input type="tel" placeholder="Phone Number" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} maxLength={10} className="w-full bg-[#1A1D24] text-xs text-white p-2.5 rounded-lg border border-gray-800 mb-4 outline-none focus:border-[#E5B35C]" />
+
+        {/* CART LIST */}
+        <div className="flex-1 overflow-y-auto min-h-[50px] mb-4 space-y-2 no-scrollbar pr-1">
+          {posCart.length === 0 ? (
+            <p className="text-gray-700 text-xs text-center mt-4 uppercase tracking-widest font-black">Cart is empty</p>
+          ) : (
+            posCart.map((item, idx) => (
+              <div key={idx} className="flex justify-between items-center text-xs text-gray-300 bg-[#1A1D24] p-2 rounded-lg border border-gray-800/50">
+                <div className="flex items-center gap-2">
+                  <button onClick={() => removeFromPos(item.id)} className="w-6 h-6 bg-red-900/30 text-red-500 rounded font-black active:scale-90 border border-red-900/50 hover:bg-red-900/50">−</button>
+                  <span className="font-bold text-[#E5B35C] w-4">{item.qty}x</span>
+                  <span className="font-medium line-clamp-1 w-24">{item.name}</span>
+                </div>
+                <span className="font-bold">₹{item.price * item.qty}</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* CHECKOUT BLOCK */}
+        <div className="shrink-0 bg-[#0A0C10] pt-2">
+          {activePromo && rawTotal >= activePromo.minOrderValue && (
+            <div onClick={() => setApplyDiscount(!applyDiscount)} className="flex justify-between items-center bg-[#1A1D24] p-2.5 rounded-lg border border-gray-800 mb-3 cursor-pointer">
+              <span className="text-[10px] font-bold text-[#E5B35C] uppercase">Apply {activePromo.code}</span>
+              <div className={`w-8 h-4 rounded-full flex items-center p-0.5 transition-colors ${applyDiscount ? 'bg-green-500' : 'bg-gray-700'}`}>
+                <div className={`w-3 h-3 bg-white rounded-full transform transition-transform ${applyDiscount ? 'translate-x-4' : ''}`}></div>
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-gray-800 pt-3 mb-3 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Total</span>
+              {posCart.length > 0 && (
+                <button onClick={handleClearPos} className="bg-red-900/20 text-red-500 text-[9px] font-bold uppercase px-2 py-1 rounded border border-red-900/50 active:scale-95">Clear</button>
+              )}
+            </div>
+            <div className="text-right">
+              {applyDiscount && activePromo && rawTotal >= activePromo.minOrderValue && <span className="text-gray-600 text-xs line-through mr-2">₹{rawTotal}</span>}
+              <span className="text-[#E5B35C] text-xl font-black">₹{finalTotal}</span>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button disabled={isSubmitting || posCart.length === 0} onClick={() => submitManualOrder('CASH')} className="flex-1 bg-gray-800 text-white font-bold py-3 rounded-lg text-xs hover:bg-gray-700 disabled:opacity-50 active:scale-95">💵 CASH</button>
+            <button disabled={isSubmitting || posCart.length === 0} onClick={() => submitManualOrder('UPI')} className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg text-xs hover:bg-blue-700 disabled:opacity-50 active:scale-95">⚡ UPI</button>
+          </div>
+        </div>
       </div>
 
-      {/* 🚀 THE 3-SEGMENT STATIC GRID (HORIZONTAL ROWS) */}
-      <div className="flex-1 grid grid-rows-3 gap-4 min-h-0">
+      {/* 🚀 RIGHT COLUMN: THE 3-SEGMENT HORIZONTAL KDS */}
+      <div className="flex-1 flex flex-col min-w-0">
         
         {/* ROW 1: NEW */}
-        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-full min-h-0">
-          <h3 className="text-sm font-bold text-blue-500 mb-2 flex items-center shrink-0">
-            NEW <span className="bg-blue-500/20 px-2 py-0.5 rounded text-xs ml-2">{newOrders.length}</span>
-          </h3>
-          {/* 🧠 Strict 4-Slot Grid prevents horizontal stretching */}
+        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-1/3 min-h-0 mb-4">
+          <h3 className="text-sm font-bold text-blue-500 mb-2 flex items-center shrink-0">NEW <span className="bg-blue-500/20 px-2 py-0.5 rounded text-xs ml-2">{newOrders.length}</span></h3>
           <div className="flex-1 grid grid-cols-4 gap-3 min-h-0 w-full">
-            {newOrders.slice(0, 3).map(order => (
-              <div key={order.id} className="h-full">{renderCard(order, 'NEW')}</div>
-            ))}
-            
+            {newOrders.slice(0, 3).map(order => <div key={order.id} className="h-full">{renderCard(order, 'NEW')}</div>)}
             {newOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-xs">No New Orders</div>}
-            
-            {/* SLOT 4: THE +X BUTTON */}
             {newOrders.length > 3 && (
-              <button onClick={() => setExpandedSegment('NEW')} className="h-full bg-blue-900/30 border border-blue-500/30 text-blue-400 font-black rounded-xl hover:bg-blue-900/50 transition-colors flex flex-col items-center justify-center">
-                <span className="text-3xl">+{newOrders.length - 3}</span>
-                <span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
+              <button onClick={() => setExpandedSegment('NEW')} className="h-full bg-blue-900/30 border border-blue-500/30 text-blue-400 font-black rounded-xl flex flex-col items-center justify-center">
+                <span className="text-3xl">+{newOrders.length - 3}</span><span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
               </button>
             )}
           </div>
         </div>
 
         {/* ROW 2: PREPARING */}
-        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-full min-h-0">
-          <h3 className="text-sm font-bold text-[#E5B35C] mb-2 flex items-center shrink-0">
-            PREPARING <span className="bg-[#E5B35C]/20 px-2 py-0.5 rounded text-xs ml-2">{prepOrders.length}</span>
-          </h3>
+        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-1/3 min-h-0 mb-4">
+          <h3 className="text-sm font-bold text-[#E5B35C] mb-2 flex items-center shrink-0">PREPARING <span className="bg-[#E5B35C]/20 px-2 py-0.5 rounded text-xs ml-2">{prepOrders.length}</span></h3>
           <div className="flex-1 grid grid-cols-4 gap-3 min-h-0 w-full">
-            {prepOrders.slice(0, 3).map(order => (
-              <div key={order.id} className="h-full">{renderCard(order, 'PREP')}</div>
-            ))}
-            
+            {prepOrders.slice(0, 3).map(order => <div key={order.id} className="h-full">{renderCard(order, 'PREP')}</div>)}
             {prepOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-xs">Grill is empty</div>}
-            
-            {/* SLOT 4: THE +X BUTTON */}
             {prepOrders.length > 3 && (
-              <button onClick={() => setExpandedSegment('PREP')} className="h-full bg-[#E5B35C]/10 border border-[#E5B35C]/30 text-[#E5B35C] font-black rounded-xl hover:bg-[#E5B35C]/20 transition-colors flex flex-col items-center justify-center">
-                <span className="text-3xl">+{prepOrders.length - 3}</span>
-                <span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
+              <button onClick={() => setExpandedSegment('PREP')} className="h-full bg-[#E5B35C]/10 border border-[#E5B35C]/30 text-[#E5B35C] font-black rounded-xl flex flex-col items-center justify-center">
+                <span className="text-3xl">+{prepOrders.length - 3}</span><span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
               </button>
             )}
           </div>
         </div>
 
         {/* ROW 3: HISTORY */}
-        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-full min-h-0">
-          <h3 className="text-sm font-bold text-gray-400 mb-2 flex items-center shrink-0">
-            HISTORY <span className="bg-gray-800 px-2 py-0.5 rounded text-xs ml-2">{completedOrders.length}</span>
-          </h3>
+        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-1/3 min-h-0">
+          <h3 className="text-sm font-bold text-gray-400 mb-2 flex items-center shrink-0">HISTORY <span className="bg-gray-800 px-2 py-0.5 rounded text-xs ml-2">{historyOrders.length}</span></h3>
           <div className="flex-1 grid grid-cols-4 gap-3 min-h-0 w-full">
-            {completedOrders.slice(0, 3).map(order => (
-              <div key={order.id} className="h-full opacity-70">{renderCard(order, 'HISTORY')}</div>
-            ))}
-            
-            {completedOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-xs">No history yet</div>}
-            
-            {/* SLOT 4: THE +X BUTTON */}
-            {completedOrders.length > 3 && (
-              <button onClick={() => setExpandedSegment('HISTORY')} className="h-full bg-gray-800 border border-gray-700 text-gray-400 font-black rounded-xl hover:bg-gray-700 transition-colors flex flex-col items-center justify-center">
-                <span className="text-3xl">+{completedOrders.length - 3}</span>
-                <span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
+            {historyOrders.slice(0, 3).map(order => <div key={order.id} className="h-full opacity-70">{renderCard(order, 'HISTORY')}</div>)}
+            {historyOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-xs">No history yet</div>}
+            {historyOrders.length > 3 && (
+              <button onClick={() => setExpandedSegment('HISTORY')} className="h-full bg-gray-800 border border-gray-700 text-gray-400 font-black rounded-xl flex flex-col items-center justify-center">
+                <span className="text-3xl">+{historyOrders.length - 3}</span><span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
               </button>
             )}
           </div>
         </div>
-
+        
       </div>
+
+      {/* 🚀 MODAL (Rendered dynamically if +X is clicked) */}
+      {expandedSegment && (
+        <div className="fixed inset-0 bg-[#0B0E14] z-50 flex flex-col p-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-800">
+            <h2 className="text-3xl font-black text-white">{expandedSegment} ORDERS</h2>
+            <button onClick={() => setExpandedSegment(null)} className="w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full font-black text-xl flex items-center justify-center shadow-lg active:scale-90">✕</button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 overflow-y-auto pb-20">
+            {(expandedSegment === 'NEW' ? newOrders : expandedSegment === 'PREP' ? prepOrders : historyOrders).map(order => renderCard(order, expandedSegment))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

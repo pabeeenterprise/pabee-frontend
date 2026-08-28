@@ -185,7 +185,54 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
   return (
     <div className="h-screen w-full bg-[#0B0E14] flex gap-4 overflow-hidden p-4">
       
-      {/* 🚀 LEFT COLUMN: THE NEW QUICK POS */}
+      {/* 🚀 LEFT COLUMN: THE 3-SEGMENT HORIZONTAL KDS */}
+      <div className="flex-1 flex flex-col min-w-0">
+        
+        {/* ROW 1: NEW */}
+        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-1/3 min-h-0 mb-4">
+          <h3 className="text-sm font-bold text-blue-500 mb-2 flex items-center shrink-0">NEW <span className="bg-blue-500/20 px-2 py-0.5 rounded text-xs ml-2">{newOrders.length}</span></h3>
+          <div className="flex-1 grid grid-cols-4 gap-3 min-h-0 w-full">
+            {newOrders.slice(0, 3).map(order => <div key={order.id} className="h-full">{renderCard(order, 'NEW')}</div>)}
+            {newOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-xs">No New Orders</div>}
+            {newOrders.length > 3 && (
+              <button onClick={() => setExpandedSegment('NEW')} className="h-full bg-blue-900/30 border border-blue-500/30 text-blue-400 font-black rounded-xl flex flex-col items-center justify-center">
+                <span className="text-3xl">+{newOrders.length - 3}</span><span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ROW 2: PREPARING */}
+        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-1/3 min-h-0 mb-4">
+          <h3 className="text-sm font-bold text-[#E5B35C] mb-2 flex items-center shrink-0">PREPARING <span className="bg-[#E5B35C]/20 px-2 py-0.5 rounded text-xs ml-2">{prepOrders.length}</span></h3>
+          <div className="flex-1 grid grid-cols-4 gap-3 min-h-0 w-full">
+            {prepOrders.slice(0, 3).map(order => <div key={order.id} className="h-full">{renderCard(order, 'PREP')}</div>)}
+            {prepOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-xs">Grill is empty</div>}
+            {prepOrders.length > 3 && (
+              <button onClick={() => setExpandedSegment('PREP')} className="h-full bg-[#E5B35C]/10 border border-[#E5B35C]/30 text-[#E5B35C] font-black rounded-xl flex flex-col items-center justify-center">
+                <span className="text-3xl">+{prepOrders.length - 3}</span><span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ROW 3: HISTORY */}
+        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-1/3 min-h-0">
+          <h3 className="text-sm font-bold text-gray-400 mb-2 flex items-center shrink-0">HISTORY <span className="bg-gray-800 px-2 py-0.5 rounded text-xs ml-2">{historyOrders.length}</span></h3>
+          <div className="flex-1 grid grid-cols-4 gap-3 min-h-0 w-full">
+            {historyOrders.slice(0, 3).map(order => <div key={order.id} className="h-full opacity-70">{renderCard(order, 'HISTORY')}</div>)}
+            {historyOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-xs">No history yet</div>}
+            {historyOrders.length > 3 && (
+              <button onClick={() => setExpandedSegment('HISTORY')} className="h-full bg-gray-800 border border-gray-700 text-gray-400 font-black rounded-xl flex flex-col items-center justify-center">
+                <span className="text-3xl">+{historyOrders.length - 3}</span><span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
+              </button>
+            )}
+          </div>
+        </div>
+        
+      </div>
+
+      {/* 🚀 RIGHT COLUMN: THE NEW QUICK POS (Swapped) */}
       <div className="w-80 shrink-0 bg-[#0A0C10] border border-gray-800/40 rounded-2xl p-4 flex flex-col h-full relative">
         <h2 className="text-white font-black text-lg mb-4 flex items-center gap-2">
           <span>⚡</span> New Walk-Up
@@ -270,53 +317,6 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
             <button disabled={isSubmitting || posCart.length === 0} onClick={() => submitManualOrder('UPI')} className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg text-xs hover:bg-blue-700 disabled:opacity-50 active:scale-95">⚡ UPI</button>
           </div>
         </div>
-      </div>
-
-      {/* 🚀 RIGHT COLUMN: THE 3-SEGMENT HORIZONTAL KDS */}
-      <div className="flex-1 flex flex-col min-w-0">
-        
-        {/* ROW 1: NEW */}
-        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-1/3 min-h-0 mb-4">
-          <h3 className="text-sm font-bold text-blue-500 mb-2 flex items-center shrink-0">NEW <span className="bg-blue-500/20 px-2 py-0.5 rounded text-xs ml-2">{newOrders.length}</span></h3>
-          <div className="flex-1 grid grid-cols-4 gap-3 min-h-0 w-full">
-            {newOrders.slice(0, 3).map(order => <div key={order.id} className="h-full">{renderCard(order, 'NEW')}</div>)}
-            {newOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-xs">No New Orders</div>}
-            {newOrders.length > 3 && (
-              <button onClick={() => setExpandedSegment('NEW')} className="h-full bg-blue-900/30 border border-blue-500/30 text-blue-400 font-black rounded-xl flex flex-col items-center justify-center">
-                <span className="text-3xl">+{newOrders.length - 3}</span><span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* ROW 2: PREPARING */}
-        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-1/3 min-h-0 mb-4">
-          <h3 className="text-sm font-bold text-[#E5B35C] mb-2 flex items-center shrink-0">PREPARING <span className="bg-[#E5B35C]/20 px-2 py-0.5 rounded text-xs ml-2">{prepOrders.length}</span></h3>
-          <div className="flex-1 grid grid-cols-4 gap-3 min-h-0 w-full">
-            {prepOrders.slice(0, 3).map(order => <div key={order.id} className="h-full">{renderCard(order, 'PREP')}</div>)}
-            {prepOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-xs">Grill is empty</div>}
-            {prepOrders.length > 3 && (
-              <button onClick={() => setExpandedSegment('PREP')} className="h-full bg-[#E5B35C]/10 border border-[#E5B35C]/30 text-[#E5B35C] font-black rounded-xl flex flex-col items-center justify-center">
-                <span className="text-3xl">+{prepOrders.length - 3}</span><span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* ROW 3: HISTORY */}
-        <div className="flex flex-col bg-[#0A0C10] rounded-2xl border border-gray-800/40 p-3 h-1/3 min-h-0">
-          <h3 className="text-sm font-bold text-gray-400 mb-2 flex items-center shrink-0">HISTORY <span className="bg-gray-800 px-2 py-0.5 rounded text-xs ml-2">{historyOrders.length}</span></h3>
-          <div className="flex-1 grid grid-cols-4 gap-3 min-h-0 w-full">
-            {historyOrders.slice(0, 3).map(order => <div key={order.id} className="h-full opacity-70">{renderCard(order, 'HISTORY')}</div>)}
-            {historyOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-xs">No history yet</div>}
-            {historyOrders.length > 3 && (
-              <button onClick={() => setExpandedSegment('HISTORY')} className="h-full bg-gray-800 border border-gray-700 text-gray-400 font-black rounded-xl flex flex-col items-center justify-center">
-                <span className="text-3xl">+{historyOrders.length - 3}</span><span className="text-[10px] mt-1 font-bold tracking-widest">MORE</span>
-              </button>
-            )}
-          </div>
-        </div>
-        
       </div>
 
       {/* 🚀 MODAL (Rendered dynamically if +X is clicked) */}

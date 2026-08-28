@@ -10,7 +10,6 @@ import MyQRCode from './MyQRCode';
 import Settings from './Settings';
 import BrandingStudio from './BrandingStudio';
 import PaymentSettings from './PaymentSettings';
-import QuickPOS from './QuickPOS'; 
 
 export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorId: string }) {
   const { userId, isLoaded } = useAuth(); // Grab the real Google ID!
@@ -61,7 +60,6 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
               
               {/* ⚡ The Quick POS sits directly underneath it */}
               <div className="px-4 md:px-8 pb-12 flex-shrink-0 max-w-5xl">
-                <QuickPOS vendorId={realVendorId} />
               </div>
             </div>
           )}

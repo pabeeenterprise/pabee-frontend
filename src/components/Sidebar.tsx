@@ -1,20 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 
-// Defining our navigation links outside the component keeps the code clean
+// 🚨 We add a 'locked' boolean to physically show the worker what is off-limits
 const NAV_ITEMS = [
-  { id: 'overview', label: 'Overview', icon: '📊' },
-  { id: 'live-orders', label: 'Live orders', icon: '🧾' },
-  { id: 'menu-editor', label: '🍳 Menu editor', icon: '🍳' }, // Using emojis as placeholders for your real icons
-  { id: 'branding', label: 'Branding studio', icon: '🎨' },
-  { id: 'offers', label: 'Offers & promos', icon: '🏷️' },
-  { id: 'analytics', label: 'Analytics', icon: '📈' },
-  { id: 'qr-code', label: 'My QR code', icon: '📱' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' },
-  { id: 'payment-settings', label: 'Payment Setup', icon: '💳' } // 👈 ADD THIS LINE
+  // PUBLIC TABS
+  { id: 'live-orders', label: 'Master Terminal', icon: '🧾', locked: false },
+  { id: 'qr-code', label: 'Customer QR Code', icon: '📱', locked: false },
+  
+  // RESTRICTED TABS (Requires PIN)
+  { id: 'overview', label: 'Overview', icon: '📊', locked: true },
+  { id: 'menu-editor', label: 'Menu Editor', icon: '🍳', locked: true }, 
+  { id: 'offers', label: 'Offers & Promos', icon: '🏷️', locked: true },
+  { id: 'analytics', label: 'Analytics', icon: '📈', locked: true },
+  { id: 'payment-settings', label: 'Payment Setup', icon: '💳', locked: true },
+  { id: 'branding', label: 'Branding Studio', icon: '🎨', locked: true },
+  { id: 'settings', label: 'Settings', icon: '⚙️', locked: true } 
 ];
 
-// We pass in two "props": the current tab, and the function to change it
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -73,14 +75,23 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 ${
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-200 ${
                 activeTab === item.id 
-                  ? 'bg-[#1A1D24] text-[#E5B35C] font-medium shadow-sm' // Active state (Gold)
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1D24]/50' // Inactive state (Gray)
+                  ? 'bg-[#1A1D24] text-[#E5B35C] font-medium shadow-sm border border-gray-800/50' 
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-[#1A1D24]/50' 
               }`}
             >
-              <span className="text-lg opacity-80">{item.icon}</span>
-              {item.label}
+              <div className="flex items-center gap-3">
+                <span className="text-lg opacity-80">{item.icon}</span>
+                {item.label}
+              </div>
+              
+              {/* 🚨 VISUAL PADLOCK FOR RESTRICTED TABS */}
+              {item.locked && (
+                <span className={`text-[10px] ${activeTab === item.id ? 'opacity-100' : 'opacity-40'}`}>
+                  🔒
+                </span>
+              )}
             </button>
           ))}
         </nav>

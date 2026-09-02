@@ -6,6 +6,7 @@ import HeatmapTab from './analytics/HeatmapTab';
 import CustomersTab from './analytics/CustomersTab';
 import ForecastTab from './analytics/ForecastTab'; // 👈 Imported
 import InsightsTab from './analytics/InsightsTab'; // 👈 Imported
+import LedgerTab from './analytics/LedgerTab';
 
 const MOCK_DATA: AnalyticsData = {
   revenue: "324",
@@ -184,6 +185,7 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
       <div className="flex items-center gap-6 border-b border-[#1F2330] pb-px overflow-x-auto no-scrollbar mt-2">
         {[
           { id: 'revenue', icon: '📈', label: 'Revenue' },
+          { id: 'ledger', icon: '💰', label: 'P&L Ledger' },
           { id: 'menu-matrix', icon: '🍽️', label: 'Menu Matrix' },
           { id: 'heatmap', icon: '🔥', label: 'Heatmap' },
           { id: 'customers', icon: '👥', label: 'Customers' },
@@ -206,6 +208,8 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
       <div className="min-h-[400px]">
         {activeTab === 'revenue' && <RevenueTab data={data} />}
         
+        {activeTab === 'ledger' && <LedgerTab vendorId={vendorId} />}
+
         {activeTab === 'menu-matrix' && (
           data.menuMatrix ? <MenuMatrixTab data={data.menuMatrix} /> : <div className="text-gray-500 p-12 text-center animate-pulse">Loading Matrix...</div>
         )}

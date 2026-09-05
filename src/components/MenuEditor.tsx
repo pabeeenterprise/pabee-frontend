@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase'; 
 import { useAuth } from '@clerk/clerk-react'; 
+const [showAddModal, setShowAddModal] = useState(false);
 
 type MenuItem = {
   id: string;
@@ -170,6 +171,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
 
       if (res.ok) {
         toast.success("Item added to menu!");
+        setShowAddModal(false);
         fetchMenu(); 
         setName(''); setPrice(''); setPrep('10 min'); setImageFile(null);
         setDescription(''); setCostPrice(''); setRemarks(''); setBadgeLabel('');
@@ -407,79 +409,26 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
       </div>
 
       {/* ============================================================== */}
-      {/* 🍳 VIEW 1: DISH CATALOG (Your Existing Logic + Recipe Trigger) */}
+      {/* 🍳 VIEW 1: DISH CATALOG (Table First, Form in Modal)           */}
       {/* ============================================================== */}
       {activeTab === 'dishes' && (
-        <div>
-          {/* --- ADD ITEM FORM --- */}
-          <form onSubmit={handleAddItem} className="bg-[#13161F] border border-[#1F2330] rounded-2xl p-6 shadow-xl mb-8">
-            <h3 className="text-lg font-bold text-gray-200 mb-4">Add New Dish</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Item Name</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Tandoori Roti" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Price (₹)</label>
-                <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} required min="1" placeholder="0" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Prep Time</label>
-                <input type="text" value={prep} onChange={(e) => setPrep(e.target.value)} required placeholder="e.g. 10 min" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Category</label>
-                <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none">
-                  <option>Food</option>
-                  <option>Snacks</option>
-                  <option>Drinks</option>
-                  <option>Dessert</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Type</label>
-                <select value={veg ? "veg" : "non-veg"} onChange={(e) => setVeg(e.target.value === "veg")} className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none">
-                  <option value="veg">🟢 Veg</option>
-                  <option value="non-veg">🔴 Non-Veg</option>
-                </select>
-              </div>
+        <div className="flex flex-col gap-4">
+          
+          {/* TOP ACTION BAR */}
+          <div className="flex justify-between items-center bg-[#13161F] border border-[#1F2330] p-4 rounded-xl">
+            <div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider">Active Dishes</h3>
+              <p className="text-xs text-gray-500">Showing {items.length} items configured on your counter</p>
             </div>
+            <button 
+              onClick={() => setShowAddModal(true)}
+              className="bg-[#E5B35C] hover:bg-[#d4a24b] text-[#0B0E14] font-black text-xs px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-lg"
+            >
+              + Add New Dish
+            </button>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Description</label>
-                <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Rich buttery bhaji with soft pavs" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Cost Price (₹)</label>
-                <input type="number" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} placeholder="e.g. 28" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Remarks</label>
-                <input type="text" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Regular spicy, Less spicy" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Badge Label</label>
-                <input type="text" value={badgeLabel} onChange={(e) => setBadgeLabel(e.target.value)} placeholder="e.g. Best Seller" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-              </div>
-            </div>
-
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-between border-t border-[#1F2330] pt-4">
-              <div className="w-full md:w-1/2">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Item Photo (Optional)</label>
-                <input id="image-upload" type="file" accept="image/*" onChange={handleFileChange} className="w-full bg-[#0B0E14] border border-gray-700 text-gray-400 rounded-lg p-2 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#E5B35C] file:text-[#0B0E14] hover:file:bg-[#d4a24b] cursor-pointer" />
-              </div>
-              <button type="submit" disabled={isSaving || isUploadingImage} className="w-full md:w-auto bg-[#E5B35C] text-[#0B0E14] font-bold py-3 px-8 rounded-lg text-sm hover:bg-[#d4a24b] transition-all disabled:opacity-50 mt-4 md:mt-6">
-                {isUploadingImage ? 'Uploading...' : isSaving ? 'Saving...' : '+ Add Item'}
-              </button>
-            </div>
-          </form>
-
-          {/* --- LIVE MENU LIST --- */}
+          {/* --- LIVE MENU LIST (NOW AT THE TOP) --- */}
           <div className="bg-[#13161F] border border-[#1F2330] rounded-2xl shadow-xl overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -522,7 +471,6 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                         </button>
                       </td>
                       <td className="p-4 text-right flex justify-end gap-3 items-center">
-                        {/* 🔗 RECIPE LINK BUTTON */}
                         <button onClick={() => openRecipeModal(item)} className="text-xs bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 px-2.5 py-1 rounded-md border border-gray-700 transition-colors">
                           🔗 Recipe
                         </button>
@@ -539,6 +487,101 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
               </tbody>
             </table>
           </div>
+
+          {/* --- ADD DISH POPUP MODAL (HIDDEN BY DEFAULT) --- */}
+          {showAddModal && (
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-[#13161F] border border-gray-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar">
+                
+                <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
+                  <div>
+                    <h3 className="text-xl font-black text-white">Add New Dish</h3>
+                    <p className="text-xs text-gray-500">Configure item pricing, kitchen prep time, and visibility</p>
+                  </div>
+                  <button 
+                    onClick={() => setShowAddModal(false)}
+                    className="text-gray-400 hover:text-white text-xl font-bold w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddItem} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Item Name</label>
+                      <input type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Tandoori Roti" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Price (₹)</label>
+                      <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} required min="1" placeholder="0" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Prep Time</label>
+                      <input type="text" value={prep} onChange={(e) => setPrep(e.target.value)} required placeholder="e.g. 10 min" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Category</label>
+                      <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none">
+                        <option>Food</option>
+                        <option>Snacks</option>
+                        <option>Drinks</option>
+                        <option>Dessert</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Dietary Type</label>
+                      <select value={veg ? "veg" : "non-veg"} onChange={(e) => setVeg(e.target.value === "veg")} className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none">
+                        <option value="veg">🟢 Veg</option>
+                        <option value="non-veg">🔴 Non-Veg</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Description</label>
+                      <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Rich buttery bhaji with soft pavs" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Cost Price (₹)</label>
+                      <input type="number" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} placeholder="e.g. 28" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Remarks</label>
+                      <input type="text" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Regular spicy, Less spicy" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Badge Label</label>
+                      <input type="text" value={badgeLabel} onChange={(e) => setBadgeLabel(e.target.value)} placeholder="e.g. Best Seller" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Item Photo (Optional)</label>
+                    <input id="image-upload" type="file" accept="image/*" onChange={handleFileChange} className="w-full bg-[#0B0E14] border border-gray-700 text-gray-400 rounded-lg p-2 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#E5B35C] file:text-[#0B0E14] hover:file:bg-[#d4a24b] cursor-pointer" />
+                  </div>
+
+                  <div className="flex gap-3 pt-4 border-t border-[#1F2330]">
+                    <button type="submit" disabled={isSaving || isUploadingImage} className="flex-1 bg-[#E5B35C] text-[#0B0E14] font-black py-3 rounded-xl text-sm hover:bg-[#d4a24b] transition-all disabled:opacity-50">
+                      {isUploadingImage ? 'Uploading...' : isSaving ? 'Saving...' : 'Save & Publish Dish'}
+                    </button>
+                    <button type="button" onClick={() => setShowAddModal(false)} className="px-6 py-3 bg-gray-800 text-gray-400 font-bold text-sm rounded-xl hover:bg-gray-700 transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 

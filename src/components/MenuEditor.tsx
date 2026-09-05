@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase'; 
 import { useAuth } from '@clerk/clerk-react'; 
-const [showAddModal, setShowAddModal] = useState(false);
 
 type MenuItem = {
   id: string;
@@ -36,6 +35,7 @@ type RecipeIngredient = {
 export default function MenuEditor({ vendorId }: { vendorId: string }) {
   // 🧭 TAB NAVIGATION STATE
   const [activeTab, setActiveTab] = useState<'dishes' | 'inventory'>('dishes');
+  const [showAddModal, setShowAddModal] = useState(false);
 
   // DISH STATE
   const [items, setItems] = useState<MenuItem[]>([]);

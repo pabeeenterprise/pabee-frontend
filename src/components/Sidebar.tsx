@@ -8,13 +8,13 @@ const NAV_ITEMS = [
   { id: 'qr-code', label: 'Customer QR Code', icon: '📱', locked: false },
   
   // RESTRICTED TABS (Requires PIN)
-  { id: 'overview', label: 'Overview', icon: '📊', locked: true },
-  { id: 'menu-editor', label: 'Menu Editor', icon: '🍳', locked: true }, 
-  { id: 'offers', label: 'Offers & Promos', icon: '🏷️', locked: true },
-  { id: 'analytics', label: 'Analytics', icon: '📈', locked: true },
-  { id: 'payment-settings', label: 'Payment Setup', icon: '💳', locked: true },
-  { id: 'branding', label: 'Branding Studio', icon: '🎨', locked: true },
-  { id: 'settings', label: 'Settings', icon: '⚙️', locked: true } 
+  { id: 'overview', label: 'Overview', icon: '📊', locked: false },
+  { id: 'menu-editor', label: 'Menu Editor', icon: '🍳', locked: false }, 
+  { id: 'offers', label: 'Offers & Promos', icon: '🏷️', locked: false },
+  { id: 'analytics', label: 'Analytics', icon: '📈', locked: false },
+  { id: 'payment-settings', label: 'Payment Setup', icon: '💳', locked: false },
+  { id: 'branding', label: 'Branding Studio', icon: '🎨', locked: false },
+  { id: 'settings', label: 'Settings', icon: '⚙️', locked: false } 
 ];
 
 interface SidebarProps {

@@ -36,11 +36,17 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
 
       if (menuItems.length === 0) {
         const menuRes = await fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`, { headers });
-        const promoRes = await fetch(`${API_URL}/api/vendors/${vendorId}/promos`, { headers });
-        if (menuRes.ok) setMenuItems((await menuRes.json()).items || []);
+        const promoRes = await fetch(`${API_URL}/api/vendors/${vendorId}/promos?activeOnly=true`, { headers });        if (menuRes.ok) setMenuItems((await menuRes.json()).items || []);
         if (promoRes.ok) {
           const promoData = await promoRes.json();
-          setActivePromo(promoData.promos?.find((p: any) => p.isActive) || null);
+          const now = new Date();
+          // 🚨 Ensure we only pick a promo that is active AND not expired
+          const validPromo = promoData.promos?.find((p: any) => {
+            if (!p.isActive) return false;
+            if (p.expiresAt && new Date(p.expiresAt) < now) return false;
+            return true;
+          });
+          setActivePromo(validPromo || null);
         }
       }
     } catch (err) {
@@ -83,6 +89,38 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
   }
 
   const handleClearPos = () => { setPosCart([]); setReference(''); setPhone(''); setApplyDiscount(false); };
+
+  const handleToggleDiscount = () => {
+    // If turning the discount OFF, allow it immediately
+    if (applyDiscount) {
+      setApplyDiscount(false);
+      return;
+    }
+
+    // If turning the discount ON, validate freshness
+    if (!activePromo) return;
+
+    if (activePromo.expiresAt && new Date(activePromo.expiresAt) < new Date()) {
+      toast.error(`Promo ${activePromo.code} has expired.`);
+      setActivePromo(null);
+      setApplyDiscount(false);
+      return;
+    }
+
+    if (!activePromo.isActive) {
+      toast.error(`Promo ${activePromo.code} is no longer active.`);
+      setActivePromo(null);
+      setApplyDiscount(false);
+      return;
+    }
+
+    if (rawTotal < activePromo.minOrderValue) {
+      toast.error(`Minimum order value of ₹${activePromo.minOrderValue} required.`);
+      return;
+    }
+
+    setApplyDiscount(true);
+  };
 
   const submitManualOrder = async (paymentMode: 'CASH' | 'UPI') => {
     if (posCart.length === 0) return toast.error("Cart is empty!");
@@ -276,8 +314,8 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
 
         {/* CHECKOUT BLOCK */}
         <div className="shrink-0 pt-2 border-t border-gray-800/50">
-          {activePromo && rawTotal >= activePromo.minOrderValue && (
-            <div onClick={() => setApplyDiscount(!applyDiscount)} className="flex justify-between items-center bg-[#1A1D24] p-1.5 rounded-lg border border-gray-800 mb-2 cursor-pointer">
+        {activePromo && rawTotal >= activePromo.minOrderValue && (
+  <div onClick={handleToggleDiscount} className="flex justify-between items-center bg-[#1A1D24] p-1.5 rounded-lg border border-gray-800 mb-2 cursor-pointer">
               <span className="text-[9px] font-bold text-[#E5B35C] uppercase">Apply {activePromo.code}</span>
               <div className={`w-6 h-3 rounded-full flex items-center p-0.5 transition-colors ${applyDiscount ? 'bg-green-500' : 'bg-gray-700'}`}>
                 <div className={`w-2 h-2 bg-white rounded-full transform transition-transform ${applyDiscount ? 'translate-x-3' : ''}`}></div>

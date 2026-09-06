@@ -96,17 +96,59 @@ export default function MyQRCode({ vendorId }: { vendorId: string }) {
       // Draw QR Code
       ctx.drawImage(qrImage, 320, 460, 560, 560);
 
-      // Call-to-Action Headline
+      // 1. Primary Headline
       ctx.fillStyle = '#1C1008';
       ctx.font = 'bold 44px "DM Sans", sans-serif';
-      ctx.fillText('Scan with Phone Camera', 600, 1160);
+      ctx.textAlign = 'center';
+      ctx.fillText('Scan to View Menu & Order', 600, 1150);
 
-      // Micro-Instructions
-      ctx.fillStyle = '#6B5E51';
-      ctx.font = '500 28px "DM Sans", sans-serif';
-      ctx.fillText('1. Point camera at code', 600, 1230);
-      ctx.fillText('2. Select dishes & customize prep', 600, 1275);
-      ctx.fillText('3. Pay online or show token at counter', 600, 1320);
+      // 2. Google Search Pill Graphic
+      const pillX = 220;
+      const pillY = 1190;
+      const pillW = 760;
+      const pillH = 100;
+      const pillR = 50;
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#D9CEBF';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect(pillX, pillY, pillW, pillH, [pillR]);
+      ctx.fill();
+      ctx.stroke();
+
+      // Stylized 'G' Icon
+      ctx.fillStyle = '#4285F4';
+      ctx.font = 'bold 42px "DM Sans", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('G', pillX + 35, pillY + 64);
+
+      // "Tap" text
+      ctx.fillStyle = '#2C2218';
+      ctx.font = '600 28px "DM Sans", sans-serif';
+      ctx.fillText('Tap', pillX + 90, pillY + 62);
+
+      // Camera Button Accent Badge
+      ctx.fillStyle = '#E5B35C';
+      ctx.beginPath();
+      ctx.roundRect(pillX + 150, pillY + 22, 60, 56, [14]);
+      ctx.fill();
+
+      // Camera Emoji inside Badge
+      ctx.fillStyle = '#1C1008';
+      ctx.font = '30px "DM Sans", sans-serif';
+      ctx.fillText('📷', pillX + 162, pillY + 61);
+
+      // Home Screen Callout
+      ctx.fillStyle = '#2C2218';
+      ctx.font = '600 28px "DM Sans", sans-serif';
+      ctx.fillText('on your home screen', pillX + 225, pillY + 62);
+
+      // 3. Fallback Note
+      ctx.fillStyle = '#7A6B5B';
+      ctx.font = '500 24px "DM Sans", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Standard camera or Google Lens works instantly on all Android phones', 600, 1340);
 
       // Footer
       ctx.fillStyle = '#B0A290';

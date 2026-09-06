@@ -10,7 +10,7 @@ import MyQRCode from './MyQRCode';
 import Settings from './Settings';
 import BrandingStudio from './BrandingStudio';
 import PaymentSettings from './PaymentSettings';
-import PinLock from './PinLock'; 
+//import PinLock from './PinLock'; 
 
 export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorId: string }) {
   const { userId, isLoaded } = useAuth(); 
@@ -18,8 +18,8 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
   const [realVendorId, setRealVendorId] = useState<string | null>(null);
 
   // 🚨 SECURITY STATES
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [attemptingToAccess, setAttemptingToAccess] = useState<string | null>(null);
+  //const [isUnlocked, setIsUnlocked] = useState(false);
+  //const [attemptingToAccess, setAttemptingToAccess] = useState<string | null>(null);
 
   // Link Clerk Auth to your Prisma Database
   useEffect(() => {
@@ -42,6 +42,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
   // 🚨 THE NAVIGATION INTERCEPTOR
   const handleTabRequest = (requestedTab: string) => {
     // Define exactly which tabs the worker is FORBIDDEN to see without a PIN
+   /*
     const restrictedTabs = [
       'overview', 
       'menu-editor', 
@@ -59,6 +60,8 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
       // Allow them through (e.g., Live Orders, QR Code, or if already unlocked)
       setActiveTab(requestedTab);
     }
+      */
+    setActiveTab(requestedTab);
   };
 
   if (!isLoaded || !realVendorId || !userId) {
@@ -73,7 +76,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
     <div className="min-h-screen bg-[#0B0E14] text-gray-200 font-sans flex overflow-hidden">
       
       {/* 🚨 THE LOCK SCREEN OVERLAY */}
-      {attemptingToAccess && (
+      {/*{attemptingToAccess && (
         <PinLock 
           vendorId={realVendorId}
           onUnlocked={() => {
@@ -83,7 +86,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           }}
           onCancel={() => setAttemptingToAccess(null)} // Close modal without changing tabs
         />
-      )}
+      )}*/}
 
       {/* 🚨 WE HIJACK THE SIDEBAR HERE */}
       <Sidebar activeTab={activeTab} setActiveTab={handleTabRequest} />

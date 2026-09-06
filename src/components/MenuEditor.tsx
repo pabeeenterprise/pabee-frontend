@@ -71,8 +71,49 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>([]);
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
 
+  const [refillItem, setRefillItem] = useState<InventoryItem | null>(null);
+  const [refillQty, setRefillQty] = useState('');
+  const [refillCost, setRefillCost] = useState('');
+  const [isSubmittingRefill, setIsSubmittingRefill] = useState(false);
+
   const API_URL = import.meta.env.VITE_API_URL;
   const { getToken } = useAuth();
+
+  //Refill Handler Function
+  const handleRefillSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refillItem || !refillQty) return;
+    setIsSubmittingRefill(true);
+  
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/inventory/${refillItem.id}/restock`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          quantityToAdd: Number(refillQty),
+          totalPurchaseCost: Number(refillCost) || 0
+        })
+      });
+  
+      if (res.ok) {
+        toast.success(`Refilled ${refillItem.name}! Added to P&L.`);
+        setRefillItem(null);
+        setRefillQty('');
+        setRefillCost('');
+        fetchInventory();
+      } else {
+        toast.error("Refill failed");
+      }
+    } catch (err) {
+      toast.error("Network error");
+    } finally {
+      setIsSubmittingRefill(false);
+    }
+  };
 
   // 1. Fetch Dishes
   const fetchMenu = async () => {
@@ -659,6 +700,14 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                             {isLow ? 'Low Stock' : 'Healthy'}
                           </span>
                         </td>
+                        <td className="p-4 text-right">
+                          <button 
+                           onClick={() => setRefillItem(item)}
+                           className="bg-[#E5B35C] hover:bg-[#d4a24b] text-black font-bold text-xs px-3 py-1.5 rounded-lg transition-all active:scale-95"
+                          >
+                          + Refill
+                          </button>
+                        </td>
                       </tr>
                     );
                   })
@@ -756,6 +805,67 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
           </div>
         </div>
       )}
+
+      {/* ============================================================== */}
+      {/* 🔗 MODAL: REFILL INVENTORY (Add stock to pantry)               */}
+      {/* ============================================================== */}
+{refillItem && (
+  <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="bg-[#13161F] border border-gray-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+      <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-3">
+        <h3 className="text-lg font-bold text-white">Refill: {refillItem.name}</h3>
+        <button onClick={() => setRefillItem(null)} className="text-gray-400 hover:text-white">✕</button>
+      </div>
+
+      <form onSubmit={handleRefillSubmit} className="space-y-4">
+        <div>
+          <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+            Quantity to Add ({refillItem.unit})
+          </label>
+          <input 
+            type="number" 
+            value={refillQty} 
+            onChange={(e) => setRefillQty(e.target.value)} 
+            required 
+            placeholder={`e.g. 1000 ${refillItem.unit}`}
+            className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] outline-none font-bold"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
+            Total Purchase Cost (₹)
+          </label>
+          <input 
+            type="number" 
+            value={refillCost} 
+            onChange={(e) => setRefillCost(e.target.value)} 
+            placeholder="e.g. 50 (deducts from today's profit)"
+            className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] outline-none"
+          />
+          <span className="text-[10px] text-gray-500 mt-1 block">Automatically logs to your Daily P&L Ledger.</span>
+        </div>
+
+        <div className="flex gap-2 pt-2">
+          <button 
+            type="submit" 
+            disabled={isSubmittingRefill}
+            className="flex-1 bg-[#E5B35C] text-black font-bold py-2 rounded-lg text-xs hover:bg-[#d4a24b] disabled:opacity-50"
+          >
+            {isSubmittingRefill ? 'Updating...' : 'Confirm Refill'}
+          </button>
+          <button 
+            type="button" 
+            onClick={() => setRefillItem(null)} 
+            className="px-4 py-2 bg-gray-800 text-gray-400 text-xs rounded-lg hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
 
       {/* --- EDIT MODAL (Unchanged) --- */}
       {editingItem && (

@@ -331,18 +331,23 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
 
     try {
       const token = await getToken();
+      const stockQty = Number(rawStock) || 0;
+      const totalCostPaid = Number(rawCost) || 0;
+      const calculatedCostPerUnit = stockQty > 0 ? totalCostPaid / stockQty : 0;
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/inventory`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` 
         },
+
         body: JSON.stringify({
           name: rawName,
           unit: rawUnit,
-          currentStock: Number(rawStock) || 0,
+          currentStock: stockQty,
           minAlert: Number(rawAlert) || 0,
-          costPerUnit: Number(rawCost) || 0
+          costPerUnit: calculatedCostPerUnit,
+          totalPurchaseCost: totalCostPaid
         })
       });
 
@@ -636,7 +641,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
             <h3 className="text-lg font-bold text-gray-200 mb-2">Register Raw Ingredient</h3>
             <p className="text-xs text-gray-500 mb-4">Stock registered here can be linked to your dishes or counted for packaged items.</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Ingredient Name</label>
                 <input type="text" value={rawName} onChange={(e) => setRawName(e.target.value)} required placeholder="e.g. Sandwich Bread, Dairy Milk" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
@@ -654,6 +659,22 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Initial Stock</label>
                 <input type="number" value={rawStock} onChange={(e) => setRawStock(e.target.value)} required placeholder="e.g. 50" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Total Paid (₹)</label>
+                <input 
+                  type="number" 
+                  value={rawCost} 
+                  onChange={(e) => setRawCost(e.target.value)} 
+                  placeholder="e.g. 220" 
+                  className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" 
+                />
+                {rawStock && rawCost && (
+                  <span className="text-[10px] text-gray-500 mt-1 block">
+                    ≈ ₹{(Number(rawCost) / Number(rawStock)).toFixed(3)}/{rawUnit}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -677,7 +698,9 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                   <th className="p-4">Raw Ingredient</th>
                   <th className="p-4">Base Unit</th>
                   <th className="p-4">Current Stock</th>
+                  <th className="p-4">Unit Cost</th>
                   <th className="p-4">Status</th>
+                  <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1F2330]">
@@ -689,6 +712,8 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                     return (
                       <tr key={item.id} className="hover:bg-[#1a1f2b] transition-colors">
                         <td className="p-4 font-medium text-white">{item.name}</td>
+                        <td className="p-4 text-sm text-gray-400 font-mono">
+                          ₹{item.costPerUnit ? item.costPerUnit.toFixed(2) : '0.00'} / {item.unit}</td>
                         <td className="p-4 text-xs text-gray-400 font-mono uppercase">{item.unit}</td>
                         <td className="p-4 text-sm font-bold text-white">
                           {item.currentStock} <span className="text-gray-500 text-xs font-normal">{item.unit}</span>

@@ -133,7 +133,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
     }
   };
 
-  // 2. Fetch Raw Inventory
+  // 2. Fetch Raw Inventory + Dispatch Low Stock Warning
   const fetchInventory = async () => {
     try {
       const token = await getToken();
@@ -142,7 +142,20 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
       });
       if (res.ok) {
         const data = await res.json();
-        setRawItems(data.items || []);
+        const stockItems: InventoryItem[] = data.items || [];
+        setRawItems(stockItems);
+
+        // 🚨 SCAN FOR LOW STOCK AND NOTIFY
+        const depleted = stockItems.filter(
+          item => Number(item.currentStock) <= Number(item.minAlert)
+        );
+
+        if (depleted.length > 0) {
+          toast.error(
+            `⚠️ Low Stock: ${depleted.map(i => `${i.name} (${i.currentStock}${i.unit})`).join(', ')}`,
+            { id: 'inventory-alert', duration: 8000 }
+          );
+        }
       }
     } catch (error) {
       toast.error("Failed to load inventory stock");
@@ -150,10 +163,17 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
   };
 
   useEffect(() => {
-    if (vendorId) {
-      fetchMenu();
+    if (!vendorId) return;
+
+    fetchMenu();
+    fetchInventory();
+
+    // 🔄 Sync inventory state every 15 seconds
+    const interval = setInterval(() => {
       fetchInventory();
-    }
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [vendorId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -429,7 +449,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
           <p className="text-xs text-gray-400">Manage customer-facing items and underlying raw inventory.</p>
         </div>
 
-        {/* 🌟 SUB-TAB SWITCH */}
+        {/* 🌟 SUB-TAB SWITCH WITH ALERT INDICATOR */}
         <div className="flex bg-[#13161F] p-1 rounded-xl border border-[#1F2330]">
           <button 
             onClick={() => setActiveTab('dishes')}
@@ -441,15 +461,21 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
           >
             🍳 Dish Catalog ({items.length})
           </button>
+          
           <button 
             onClick={() => setActiveTab('inventory')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
               activeTab === 'inventory' 
                 ? 'bg-[#E5B35C] text-black shadow-md' 
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            📦 Raw Stock / Pantry ({rawItems.length})
+            <span>📦 Raw Stock / Pantry ({rawItems.length})</span>
+            {rawItems.some(i => Number(i.currentStock) <= Number(i.minAlert)) && (
+              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">
+                !
+              </span>
+            )}
           </button>
         </div>
       </div>

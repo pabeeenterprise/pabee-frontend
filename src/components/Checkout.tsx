@@ -57,7 +57,7 @@ export default function Checkout({
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
   const [packIt, setPackIt] = useState(false);
-  const [waUpdates, setWaUpdates] = useState(true);
+  const [cookNote, setCookNote] = useState('');
 
   // Promo Engine States
   const [promoCode, setPromoCode] = useState('');
@@ -569,8 +569,9 @@ export default function Checkout({
           </div>
         </div>
 
-        {/* Prototype Diner Details Box (`box`) */}
-        <div className="mx-4 mt-3 p-4 rounded-xl bg-white dark:bg-[#1C1A18] border border-[#E7DED0] dark:border-[#3A352E] shadow-sm space-y-3">
+        {/* Diner Details Box */}
+        <div className="mx-4 mt-3 p-4 rounded-xl bg-white dark:bg-[#1C1A18] border border-[#E7DED0] dark:border-[#3A352E] shadow-sm space-y-3.5">
+          {/* 1. Name Input */}
           <div>
             <label className="block text-sm font-semibold mb-1">
               Name (to call you) <span className="text-xs font-normal text-[#7A7266] dark:text-[#9A9184]">· optional</span>
@@ -584,47 +585,65 @@ export default function Checkout({
             />
           </div>
 
-          {/* Prototype WhatsApp Checkbox Toggle (`crow` + `cbox`) */}
-          <button
-            type="button"
-            onClick={() => setWaUpdates(!waUpdates)}
-            className="flex items-center gap-3 w-full text-left text-[15px] font-semibold py-1"
-          >
-            <span
-              className={`w-[22px] h-[22px] rounded-md border-2 border-[#7A7266] flex items-center justify-center font-bold text-xs shrink-0 ${
-                waUpdates ? 'bg-[#1C1A17] dark:bg-[#F5F0E8] border-transparent text-[#FFFBF5] dark:text-[#121110]' : 'text-transparent'
-              }`}
-            >
-              ✓
-            </span>
-            <span>WhatsApp me when it’s ready</span>
-          </button>
+          {/* 2. Direct Phone Input (No WhatsApp Checkbox) */}
+          <div>
+            <label className="block text-sm font-semibold mb-1">
+              Mobile number (for order status) *
+            </label>
+            <input
+              type="tel"
+              inputMode="numeric"
+              placeholder="10-digit mobile number"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full h-12 rounded-lg border border-[#E7DED0] dark:border-[#3A352E] bg-[#F6F0E6] dark:bg-[#26231F] px-3.5 text-base outline-none focus:border-[#E5B35C]"
+            />
+          </div>
 
-          {waUpdates && (
-            <div>
-              <input
-                type="tel"
-                inputMode="numeric"
-                placeholder="10-digit mobile number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full h-12 rounded-lg border border-[#E7DED0] dark:border-[#3A352E] bg-[#F6F0E6] dark:bg-[#26231F] px-3.5 text-base outline-none focus:border-[#E5B35C]"
-              />
-              <p className="text-xs text-[#7A7266] dark:text-[#9A9184] mt-1.5">
-                Used only for this order and your receipt
-              </p>
+          {/* 3. Note for the Cook with Quick-Select Chips */}
+          <div>
+            <label className="block text-sm font-semibold mb-1">
+              Note for the cook
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. less spicy, no onion, less oil"
+              value={cookNote}
+              onChange={(e) => setCookNote(e.target.value)}
+              className="w-full h-12 rounded-lg border border-[#E7DED0] dark:border-[#3A352E] bg-[#F6F0E6] dark:bg-[#26231F] px-3.5 text-base outline-none focus:border-[#E5B35C]"
+            />
+            <div className="flex gap-2 flex-wrap mt-2">
+              {['Less spicy', 'No onion', 'Less oil', 'Jain'].map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() =>
+                    setCookNote((prev) =>
+                      prev.includes(tag) ? prev : prev ? `${prev}, ${tag}` : tag
+                    )
+                  }
+                  className="px-2.5 py-1 rounded-full text-xs font-semibold border border-[#E7DED0] dark:border-[#3A352E] bg-[#F6F0E6] dark:bg-[#26231F] active:scale-95"
+                >
+                  + {tag}
+                </button>
+              ))}
             </div>
-          )}
+            <p className="text-xs text-[#7A7266] dark:text-[#9A9184] mt-1.5">
+              We&apos;ll pass this directly to the cook.
+            </p>
+          </div>
 
-          {/* Prototype Takeaway Packaging Checkbox (`crow` + `cbox`) */}
+          {/* 4. ONLY Remaining Checkbox: Takeaway Packing */}
           <button
             type="button"
             onClick={() => setPackIt(!packIt)}
-            className="flex items-center gap-3 w-full text-left text-[15px] font-semibold pt-1 border-t border-[#E7DED0] dark:border-[#3A352E]"
+            className="flex items-center gap-3 w-full text-left text-[15px] font-semibold pt-2 border-t border-[#E7DED0] dark:border-[#3A352E]"
           >
             <span
               className={`w-[22px] h-[22px] rounded-md border-2 border-[#7A7266] flex items-center justify-center font-bold text-xs shrink-0 ${
-                packIt ? 'bg-[#1C1A17] dark:bg-[#F5F0E8] border-transparent text-[#FFFBF5] dark:text-[#121110]' : 'text-transparent'
+                packIt
+                  ? 'bg-[#1C1A17] dark:bg-[#F5F0E8] border-transparent text-[#FFFBF5] dark:text-[#121110]'
+                  : 'text-transparent'
               }`}
             >
               ✓

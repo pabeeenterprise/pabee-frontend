@@ -359,6 +359,9 @@ export default function Checkout({
     }
   };
 
+  <div className="bg-red-600 text-white text-center font-bold py-2">
+  🔥 ACTIVE FILE: SRC/COMPONENTS/CHECKOUT.TSX 🔥
+</div>
   return (
     <div className="min-h-screen bg-[#FFFBF5] dark:bg-[#121110] text-[#1C1A17] dark:text-[#F5F0E8] pb-36 font-sans">
       <div className="max-w-xl mx-auto">
@@ -571,13 +574,14 @@ export default function Checkout({
 
         {/* Diner Details Box */}
         <div className="mx-4 mt-3 p-4 rounded-xl bg-white dark:bg-[#1C1A18] border border-[#E7DED0] dark:border-[#3A352E] shadow-sm space-y-3.5">
-          {/* 1. Name Input */}
+          {/* 1. Name Input (Strictly Required) */}
           <div>
             <label className="block text-sm font-semibold mb-1">
-              Name (to call you) <span className="text-xs font-normal text-[#7A7266] dark:text-[#9A9184]">· optional</span>
+              Your Name *
             </label>
             <input
               type="text"
+              required
               placeholder="e.g. Tejas"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
@@ -585,13 +589,14 @@ export default function Checkout({
             />
           </div>
 
-          {/* 2. Direct Phone Input (No WhatsApp Checkbox) */}
+          {/* 2. Phone Input */}
           <div>
             <label className="block text-sm font-semibold mb-1">
               Mobile number (for order status) *
             </label>
             <input
               type="tel"
+              required
               inputMode="numeric"
               placeholder="10-digit mobile number"
               value={phone}
@@ -600,7 +605,7 @@ export default function Checkout({
             />
           </div>
 
-          {/* 3. Note for the Cook with Quick-Select Chips */}
+          {/* 3. Note for the Cook */}
           <div>
             <label className="block text-sm font-semibold mb-1">
               Note for the cook
@@ -628,12 +633,9 @@ export default function Checkout({
                 </button>
               ))}
             </div>
-            <p className="text-xs text-[#7A7266] dark:text-[#9A9184] mt-1.5">
-              We&apos;ll pass this directly to the cook.
-            </p>
           </div>
 
-          {/* 4. ONLY Remaining Checkbox: Takeaway Packing */}
+          {/* 4. Takeaway Checkbox */}
           <button
             type="button"
             onClick={() => setPackIt(!packIt)}
@@ -648,7 +650,7 @@ export default function Checkout({
             >
               ✓
             </span>
-            <span>Pack it to take away (+₹10 packing)</span>
+            <span>Pack it to take away (+₹10 packing)[cite: 2]</span>
           </button>
         </div>
 

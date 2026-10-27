@@ -36,7 +36,6 @@ interface VendorPaymentConfig {
   razorpayKeyId?: string;
 }
 
-// 🎨 Prototype pastel tile generator for cross-sell recommendations
 const TINTS = ['#F6E7D3', '#F3DCCB', '#EAE3C8', '#E3EBD5', '#F1D9D4', '#E8DFD0'];
 const getTint = (id: string) => {
   const hash = [...(id || 'x')].reduce((acc, c) => acc + c.charCodeAt(0), 0);
@@ -56,8 +55,8 @@ export default function Checkout({
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
-  const [packIt, setPackIt] = useState(false);
   const [cookNote, setCookNote] = useState('');
+  const [packIt, setPackIt] = useState(false);
 
   // Promo Engine States
   const [promoCode, setPromoCode] = useState('');
@@ -73,7 +72,7 @@ export default function Checkout({
 
   const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
 
-  // 1. Fetch Vendor Menu (for Cross-Sell Recommendations & Stock Validation)
+  // 1. Fetch Menu for Cross-Sells & Stock Guards
   useEffect(() => {
     const fetchMenu = async () => {
       try {
@@ -109,7 +108,7 @@ export default function Checkout({
     if (vendorId) fetchPromos();
   }, [vendorId, API_URL]);
 
-  // 3. Fetch Vendor Public Payment Config
+  // 3. Fetch Public Payment Settings
   useEffect(() => {
     const fetchPaymentConfig = async () => {
       try {
@@ -133,7 +132,7 @@ export default function Checkout({
     if (vendorId) fetchPaymentConfig();
   }, [vendorId, API_URL]);
 
-  // 🧮 Calculations
+  // 🧮 Computations
   const itemTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.qty, 0),
     [cart]
@@ -141,7 +140,6 @@ export default function Checkout({
   const packingFee = packIt ? 10 : 0;
   const finalTotal = Math.max(0, itemTotal - discountAmount + packingFee);
 
-  // Prototype Cross-Sell Engine: Suggest top 3 available items not in current cart
   const crossSells = useMemo(() => {
     const inCartIds = new Set(cart.map((c) => c.id));
     return menu
@@ -149,7 +147,6 @@ export default function Checkout({
       .slice(0, 3);
   }, [menu, cart]);
 
-  // Prototype Prep Time Estimation
   const prepEstimate = useMemo(() => {
     const maxPrep = cart.length
       ? Math.max(
@@ -164,7 +161,6 @@ export default function Checkout({
     return `${lo}–${hi}`;
   }, [cart, menu]);
 
-  // 🔊 Prototype Speech Synthesis ("Listen to Order")
   const handleListenOrder = () => {
     if (!('speechSynthesis' in window)) {
       toast('Speech is not supported on this browser', { icon: '🔇' });
@@ -177,7 +173,6 @@ export default function Checkout({
     window.speechSynthesis.speak(utterance);
   };
 
-  // Promo Verification
   const handleApplyPromo = async (codeToUse?: string) => {
     const code = (codeToUse || promoCode).trim().toUpperCase();
     if (!code) return;
@@ -207,7 +202,6 @@ export default function Checkout({
     setPromoCode('');
   };
 
-  // Razorpay Loader
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
       if (window.Razorpay) return resolve(true);
@@ -219,7 +213,6 @@ export default function Checkout({
     });
   };
 
-  // Pre-Validate Stock with Server
   const checkLiveStock = async (): Promise<boolean> => {
     try {
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu`);
@@ -240,13 +233,17 @@ export default function Checkout({
     }
   };
 
-  // Save Final Order to Backend
   const saveFinalOrderToDatabase = async (finalMode: string): Promise<boolean> => {
     try {
+      // Append cook's note to customerName so the kitchen display renders it without schema changes
+      const finalCustomerName = cookNote.trim()
+        ? `${customerName.trim()} [Note: ${cookNote.trim()}]`
+        : customerName.trim();
+
       const orderPayload = {
         vendorId,
         tableId: tableId || 'Counter',
-        customerName: customerName.trim() || 'Walk-in',
+        customerName: finalCustomerName,
         customerPhone: phone.trim() || '0000000000',
         paymentMode: finalMode,
         total: finalTotal,
@@ -267,7 +264,6 @@ export default function Checkout({
         return false;
       }
 
-      // Record to Local Order History
       const completedOrder = {
         id: data.id,
         vendorId,
@@ -279,7 +275,6 @@ export default function Checkout({
       const existingHistory = JSON.parse(localStorage.getItem('pabee_order_history') || '[]');
       localStorage.setItem('pabee_order_history', JSON.stringify([completedOrder, ...existingHistory].slice(0, 5)));
 
-      // Bind Active Order Tokens for Tracking
       localStorage.setItem('activeOrderId', data.id);
       localStorage.setItem('activeOrderToken', data.tokenNumber);
       localStorage.setItem('activeOrderStatus', 'pending');
@@ -295,15 +290,19 @@ export default function Checkout({
     }
   };
 
-  // Master Checkout Trigger
   const handlePlaceOrder = async () => {
     if (cart.length === 0) {
       toast.error('Your cart is empty');
       return;
     }
 
-    if (!customerName.trim() || phone.replace(/\D/g, '').length < 10) {
-      toast.error('Please enter your name and a valid 10-digit phone number');
+    if (!customerName.trim()) {
+      toast.error('Please enter your name');
+      return;
+    }
+
+    if (phone.replace(/\D/g, '').length < 10) {
+      toast.error('Please enter a valid 10-digit mobile number');
       return;
     }
 
@@ -359,14 +358,11 @@ export default function Checkout({
     }
   };
 
-  <div className="bg-red-600 text-white text-center font-bold py-2">
-  🔥 ACTIVE FILE: SRC/COMPONENTS/CHECKOUT.TSX 🔥
-</div>
   return (
     <div className="min-h-screen bg-[#FFFBF5] dark:bg-[#121110] text-[#1C1A17] dark:text-[#F5F0E8] pb-36 font-sans">
       <div className="max-w-xl mx-auto">
         
-        {/* Prototype Top Bar (`topbar`) */}
+        {/* Top Navigation Bar (`topbar`) */}
         <div className="sticky top-0 z-20 bg-[#FFFBF5] dark:bg-[#121110] border-b border-[#E7DED0] dark:border-[#3A352E] px-4 py-2 flex items-center gap-2">
           <button
             onClick={onBack}
@@ -375,9 +371,14 @@ export default function Checkout({
           >
             ←
           </button>
-          <h1 className="text-xl font-semibold">Your order</h1>
+          
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold">Your order</h1>
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-[#E7DED0] dark:bg-[#26231F] text-[#5C554B] dark:text-[#C7BFB2]">
+              {tableId && tableId !== 'Table-Unknown' ? tableId : 'Counter'}
+            </span>
+          </div>
 
-          {/* Prototype Speech Listen Button */}
           <button
             onClick={handleListenOrder}
             className="ml-auto min-h-[36px] px-3.5 rounded-full border border-[#E7DED0] dark:border-[#3A352E] bg-white dark:bg-[#1C1A18] text-sm font-semibold flex items-center gap-1.5 active:scale-95 transition-transform"
@@ -387,7 +388,7 @@ export default function Checkout({
           </button>
         </div>
 
-        {/* Prototype 3-Column Itemized Cart Lines (`cline`) */}
+        {/* 3-Column Itemized Cart Lines (`cline`) */}
         <div className="divide-y divide-[#E7DED0] dark:divide-[#3A352E] bg-white dark:bg-[#1C1A18] border-b border-[#E7DED0] dark:border-[#3A352E]">
           {cart.length === 0 ? (
             <div className="p-8 text-center text-[#7A7266] dark:text-[#9A9184]">
@@ -399,7 +400,6 @@ export default function Checkout({
                 key={item.id}
                 className="grid grid-cols-[16px_1fr_auto] gap-3 p-4 items-start"
               >
-                {/* Official Veg / Non-Veg Mark */}
                 <span
                   role="img"
                   aria-label={item.veg ? 'Veg' : 'Non-veg'}
@@ -414,7 +414,6 @@ export default function Checkout({
                   />
                 </span>
 
-                {/* Details */}
                 <div className="min-w-0">
                   <div className="text-base font-semibold leading-tight truncate">{item.name}</div>
                   <div className="text-sm font-bold tabular-nums mt-1 text-[#1C1A17] dark:text-[#F5F0E8]">
@@ -422,7 +421,6 @@ export default function Checkout({
                   </div>
                 </div>
 
-                {/* Overlapping Counter Stepper (`step`) */}
                 <div className="w-24 h-9 rounded-lg bg-[#E5B35C] text-[#1A1206] flex items-center justify-between font-bold shadow-sm tabular-nums shrink-0">
                   <button
                     onClick={() => updateQty(item.id, -1)}
@@ -524,7 +522,6 @@ export default function Checkout({
             <span className="text-[#8A5A00] dark:text-[#E5B35C]">₹{finalTotal}</span>
           </div>
 
-          {/* Prototype Expandable Promo Box */}
           <div className="pt-2">
             {!showCodeInput && !appliedPromoCode ? (
               <button
@@ -572,7 +569,7 @@ export default function Checkout({
           </div>
         </div>
 
-        {/* Diner Details Box */}
+        {/* Diner Details Box (`box`) */}
         <div className="mx-4 mt-3 p-4 rounded-xl bg-white dark:bg-[#1C1A18] border border-[#E7DED0] dark:border-[#3A352E] shadow-sm space-y-3.5">
           {/* 1. Name Input (Strictly Required) */}
           <div>
@@ -589,7 +586,7 @@ export default function Checkout({
             />
           </div>
 
-          {/* 2. Phone Input */}
+          {/* 2. Direct Mobile Number Input */}
           <div>
             <label className="block text-sm font-semibold mb-1">
               Mobile number (for order status) *
@@ -605,7 +602,7 @@ export default function Checkout({
             />
           </div>
 
-          {/* 3. Note for the Cook */}
+          {/* 3. Note for the Cook with Quick-Select Chips */}
           <div>
             <label className="block text-sm font-semibold mb-1">
               Note for the cook
@@ -627,15 +624,18 @@ export default function Checkout({
                       prev.includes(tag) ? prev : prev ? `${prev}, ${tag}` : tag
                     )
                   }
-                  className="px-2.5 py-1 rounded-full text-xs font-semibold border border-[#E7DED0] dark:border-[#3A352E] bg-[#F6F0E6] dark:bg-[#26231F] active:scale-95"
+                  className="px-2.5 py-1 rounded-full text-xs font-semibold border border-[#E7DED0] dark:border-[#3A352E] bg-[#F6F0E6] dark:bg-[#26231F] active:scale-95 transition-transform"
                 >
                   + {tag}
                 </button>
               ))}
             </div>
+            <p className="text-xs text-[#7A7266] dark:text-[#9A9184] mt-1.5">
+              We&apos;ll pass this directly to the cook[cite: 2].
+            </p>
           </div>
 
-          {/* 4. Takeaway Checkbox */}
+          {/* 4. Takeaway Packaging Checkbox */}
           <button
             type="button"
             onClick={() => setPackIt(!packIt)}
@@ -657,10 +657,9 @@ export default function Checkout({
         {/* Prototype Payment Method Radios (`pc`) */}
         <div className="mx-4 mt-3 p-4 rounded-xl bg-white dark:bg-[#1C1A18] border border-[#E7DED0] dark:border-[#3A352E] shadow-sm space-y-2.5">
           <div className="text-[15px] font-semibold text-[#5C554B] dark:text-[#C7BFB2] mb-1">
-            Pay by
+            Pay by[cite: 2]
           </div>
 
-          {/* Option 1: Razorpay Gateway */}
           {vendorPayment?.available && vendorPayment?.paymentType === 'RAZORPAY' && (
             <button
               type="button"
@@ -677,15 +676,14 @@ export default function Checkout({
                 }`}
               />
               <div>
-                <b className="text-base block">UPI</b>
+                <b className="text-base block">UPI[cite: 2]</b>
                 <span className="text-xs text-[#7A7266] dark:text-[#9A9184] block">
-                  GPay, PhonePe, Paytm or any UPI app
+                  GPay, PhonePe, Paytm or any UPI app[cite: 2]
                 </span>
               </div>
             </button>
           )}
 
-          {/* Option 2: Direct Counter UPI */}
           {vendorPayment?.available && vendorPayment?.paymentType === 'UPI' && (
             <button
               type="button"
@@ -702,7 +700,7 @@ export default function Checkout({
                 }`}
               />
               <div>
-                <b className="text-base block">UPI</b>
+                <b className="text-base block">UPI[cite: 2]</b>
                 <span className="text-xs text-[#7A7266] dark:text-[#9A9184] block">
                   Scan QR or pay {vendorPayment.upiId}
                 </span>
@@ -710,7 +708,6 @@ export default function Checkout({
             </button>
           )}
 
-          {/* Option 3: Counter Cash */}
           <button
             type="button"
             onClick={() => setPaymentMode('CASH')}
@@ -726,9 +723,9 @@ export default function Checkout({
               }`}
             />
             <div>
-              <b className="text-base block">Cash at counter</b>
+              <b className="text-base block">Cash at counter[cite: 2]</b>
               <span className="text-xs text-[#7A7266] dark:text-[#9A9184] block">
-                Pay when you collect
+                Pay when you collect[cite: 2]
               </span>
             </div>
           </button>
@@ -741,7 +738,7 @@ export default function Checkout({
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M5 12.5l4.5 4.5L19 7.5" />
               </svg>
-              <span>You save ₹{discountAmount} on this order</span>
+              <span>You save ₹{discountAmount} on this order[cite: 2]</span>
             </div>
           )}
 
@@ -753,8 +750,8 @@ export default function Checkout({
             {isSubmitting
               ? 'Checking with kitchen…'
               : paymentMode === 'RAZORPAY' || paymentMode === 'UPI'
-                ? `Pay ₹${finalTotal} by UPI`
-                : `Place order · pay ₹${finalTotal} at counter`}
+              ? `Pay ₹${finalTotal} by UPI`
+              : `Place order · pay ₹${finalTotal} at counter`}
           </button>
         </div>
       </div>

@@ -732,8 +732,8 @@ export default function Checkout({
             {isSubmitting
               ? 'Checking with kitchen…'
               : paymentMode === 'RAZORPAY' || paymentMode === 'UPI'
-              ? `Pay ₹${finalTotal} by UPI`
-              : `Place order · pay ₹${finalTotal} at counter`}
+                ? `Pay ₹${finalTotal} by UPI`
+                : `Place order · pay ₹${finalTotal} at counter`}
           </button>
         </div>
       </div>

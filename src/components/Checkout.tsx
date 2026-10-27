@@ -631,7 +631,7 @@ export default function Checkout({
               ))}
             </div>
             <p className="text-xs text-[#7A7266] dark:text-[#9A9184] mt-1.5">
-              We&apos;ll pass this directly to the cook[cite: 2].
+              We&apos;ll pass this directly to the cook.
             </p>
           </div>
 
@@ -650,14 +650,14 @@ export default function Checkout({
             >
               ✓
             </span>
-            <span>Pack it to take away (+₹10 packing)[cite: 2]</span>
+            <span>Pack it to take away (+₹10 packing)</span>
           </button>
         </div>
 
         {/* Prototype Payment Method Radios (`pc`) */}
         <div className="mx-4 mt-3 p-4 rounded-xl bg-white dark:bg-[#1C1A18] border border-[#E7DED0] dark:border-[#3A352E] shadow-sm space-y-2.5">
           <div className="text-[15px] font-semibold text-[#5C554B] dark:text-[#C7BFB2] mb-1">
-            Pay by[cite: 2]
+            Pay by
           </div>
 
           {vendorPayment?.available && vendorPayment?.paymentType === 'RAZORPAY' && (
@@ -676,9 +676,9 @@ export default function Checkout({
                 }`}
               />
               <div>
-                <b className="text-base block">UPI[cite: 2]</b>
+                <b className="text-base block">UPI</b>
                 <span className="text-xs text-[#7A7266] dark:text-[#9A9184] block">
-                  GPay, PhonePe, Paytm or any UPI app[cite: 2]
+                  GPay, PhonePe, Paytm or any UPI app
                 </span>
               </div>
             </button>
@@ -700,7 +700,7 @@ export default function Checkout({
                 }`}
               />
               <div>
-                <b className="text-base block">UPI[cite: 2]</b>
+                <b className="text-base block">UPI</b>
                 <span className="text-xs text-[#7A7266] dark:text-[#9A9184] block">
                   Scan QR or pay {vendorPayment.upiId}
                 </span>
@@ -723,9 +723,9 @@ export default function Checkout({
               }`}
             />
             <div>
-              <b className="text-base block">Cash at counter[cite: 2]</b>
+              <b className="text-base block">Cash at counter</b>
               <span className="text-xs text-[#7A7266] dark:text-[#9A9184] block">
-                Pay when you collect[cite: 2]
+                Pay when you collect
               </span>
             </div>
           </button>
@@ -738,7 +738,7 @@ export default function Checkout({
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M5 12.5l4.5 4.5L19 7.5" />
               </svg>
-              <span>You save ₹{discountAmount} on this order[cite: 2]</span>
+              <span>You save ₹{discountAmount} on this order</span>
             </div>
           )}
 

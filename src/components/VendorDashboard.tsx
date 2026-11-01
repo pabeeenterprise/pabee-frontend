@@ -9,6 +9,7 @@ import MyQRCode from './MyQRCode';
 import Settings from './Settings';
 import BrandingStudio from './BrandingStudio';
 import PaymentSettings from './PaymentSettings';
+import CounterPOS from './CounterPOS';
 
 export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorId: string }) {
   const { userId, isLoaded } = useAuth();
@@ -158,7 +159,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
 
           {/* TAB 2: RAPID COUNTER POS */}
           {activeTab === 'counter' && (
-            <LiveOrders vendorId={realVendorId} mode="pos" soundEnabled={soundEnabled} />
+            <CounterPOS vendorId={realVendorId} />
           )}
 
           {/* TAB 3: MENU & PANTRY STOCK */}

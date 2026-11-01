@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabase'; 
-import { useAuth } from '@clerk/clerk-react'; 
+import { supabase } from '../lib/supabase';
+import { useAuth } from '@clerk/clerk-react';
 
 type MenuItem = {
   id: string;
@@ -32,33 +32,35 @@ type RecipeIngredient = {
   quantityUsed: number;
 };
 
-export default function MenuEditor({ vendorId }: { vendorId: string }) {
-  // 🧭 TAB NAVIGATION STATE
-  const [activeTab, setActiveTab] = useState<'dishes' | 'inventory'>('dishes');
-  const [showAddModal, setShowAddModal] = useState(false);
+const CATEGORIES = ['Breakfast', 'Snacks', 'Food', 'Drinks', 'Dessert'];
 
-  // DISH STATE
+export default function MenuEditor({ vendorId }: { vendorId: string }) {
+  const [activeTab, setActiveTab] = useState<'dishes' | 'inventory'>('dishes');
+
+  // Dish States
   const [items, setItems] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-
-  // Form State for dishes
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('Food');
-  const [price, setPrice] = useState('');
-  const [prep, setPrep] = useState('10 min');
-  const [veg, setVeg] = useState(true);
-  const [description, setDescription] = useState('');
-  const [costPrice, setCostPrice] = useState('');
-  const [remarks, setRemarks] = useState('');
-  const [badgeLabel, setBadgeLabel] = useState('');
-  
+  const [showDishModal, setShowDishModal] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+
+  // Dish Form States
+  const [dishName, setDishName] = useState('');
+  const [dishCategory, setDishCategory] = useState('Food');
+  const [dishPrice, setDishPrice] = useState('');
+  const [dishPrep, setDishPrep] = useState('10 min');
+  const [dishVeg, setDishVeg] = useState(true);
+  const [dishDescription, setDishDescription] = useState('');
+  const [dishCostPrice, setDishCostPrice] = useState('');
+  const [dishRemarks, setDishRemarks] = useState('');
+  const [dishBadgeLabel, setDishBadgeLabel] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
 
-  // 📦 RAW INVENTORY STATE
+  // Raw Inventory States
   const [rawItems, setRawItems] = useState<InventoryItem[]>([]);
+  const [showAddRawModal, setShowAddRawModal] = useState(false);
   const [rawName, setRawName] = useState('');
   const [rawUnit, setRawUnit] = useState<'g' | 'ml' | 'pcs'>('pcs');
   const [rawStock, setRawStock] = useState('');
@@ -66,109 +68,70 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
   const [rawCost, setRawCost] = useState('');
   const [isSavingRaw, setIsSavingRaw] = useState(false);
 
-  // 🔗 RECIPE BUILDER MODAL STATE
-  const [recipeItem, setRecipeItem] = useState<MenuItem | null>(null);
-  const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>([]);
-  const [isSavingRecipe, setIsSavingRecipe] = useState(false);
-
+  // Refill Modal States
   const [refillItem, setRefillItem] = useState<InventoryItem | null>(null);
   const [refillQty, setRefillQty] = useState('');
   const [refillCost, setRefillCost] = useState('');
   const [isSubmittingRefill, setIsSubmittingRefill] = useState(false);
 
+  // Recipe Builder Modal States
+  const [recipeDish, setRecipeDish] = useState<MenuItem | null>(null);
+  const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>([]);
+  const [isSavingRecipe, setIsSavingRecipe] = useState(false);
+
   const API_URL = import.meta.env.VITE_API_URL;
   const { getToken } = useAuth();
-
-  //Refill Handler Function
-  const handleRefillSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!refillItem || !refillQty) return;
-    setIsSubmittingRefill(true);
-  
-    try {
-      const token = await getToken();
-      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/inventory/${refillItem.id}/restock`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          quantityToAdd: Number(refillQty),
-          totalPurchaseCost: Number(refillCost) || 0
-        })
-      });
-  
-      if (res.ok) {
-        toast.success(`Refilled ${refillItem.name}! Added to P&L.`);
-        setRefillItem(null);
-        setRefillQty('');
-        setRefillCost('');
-        fetchInventory();
-      } else {
-        toast.error("Refill failed");
-      }
-    } catch (err) {
-      toast.error("Network error");
-    } finally {
-      setIsSubmittingRefill(false);
-    }
-  };
 
   // 1. Fetch Dishes
   const fetchMenu = async () => {
     try {
-      const token = await getToken(); 
+      const token = await getToken();
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`, {
-        headers: { 'Authorization': `Bearer ${token}` } 
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setItems(data.items);
+        setItems(data.items || []);
       }
-    } catch (error) {
-      toast.error("Failed to load menu");
+    } catch {
+      toast.error('Failed to load menu');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 2. Fetch Raw Inventory + Dispatch Low Stock Warning
+  // 2. Fetch Raw Inventory
   const fetchInventory = async () => {
     try {
       const token = await getToken();
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/inventory`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
         const stockItems: InventoryItem[] = data.items || [];
         setRawItems(stockItems);
 
-        // 🚨 SCAN FOR LOW STOCK AND NOTIFY
         const depleted = stockItems.filter(
-          item => Number(item.currentStock) <= Number(item.minAlert)
+          (item) => Number(item.currentStock) <= Number(item.minAlert)
         );
-
         if (depleted.length > 0) {
           toast.error(
-            `⚠️ Low Stock: ${depleted.map(i => `${i.name} (${i.currentStock}${i.unit})`).join(', ')}`,
-            { id: 'inventory-alert', duration: 8000 }
+            `⚠️ Low Stock: ${depleted.map((i) => `${i.name} (${i.currentStock} ${i.unit})`).join(', ')}`,
+            { id: 'inventory-alert', duration: 7000 }
           );
         }
       }
-    } catch (error) {
-      toast.error("Failed to load inventory stock");
+    } catch {
+      toast.error('Failed to load inventory');
     }
   };
 
   useEffect(() => {
     if (!vendorId) return;
-
     fetchMenu();
     fetchInventory();
 
-    // 🔄 Sync inventory state every 15 seconds
     const interval = setInterval(() => {
       fetchInventory();
     }, 15000);
@@ -176,88 +139,63 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
     return () => clearInterval(interval);
   }, [vendorId]);
 
+  // Open Add Dish Form
+  const openAddDish = () => {
+    setEditingItem(null);
+    setDishName('');
+    setDishCategory('Food');
+    setDishPrice('');
+    setDishPrep('10 min');
+    setDishVeg(true);
+    setDishDescription('');
+    setDishCostPrice('');
+    setDishRemarks('');
+    setDishBadgeLabel('');
+    setImageFile(null);
+    setShowMoreOptions(false);
+    setShowDishModal(true);
+  };
+
+  // Open Edit Dish Form
+  const openEditDish = (item: MenuItem) => {
+    setEditingItem(item);
+    setDishName(item.name);
+    setDishCategory(item.category || 'Food');
+    setDishPrice(item.price.toString());
+    setDishPrep(item.prep || '10 min');
+    setDishVeg(item.veg);
+    setDishDescription(item.description || '');
+    setDishCostPrice(item.costPrice ? item.costPrice.toString() : '');
+    setDishRemarks(item.remarks || '');
+    setDishBadgeLabel(item.badgeLabel || '');
+    setImageFile(null);
+    setShowMoreOptions(Boolean(item.costPrice || item.remarks || item.badgeLabel));
+    setShowDishModal(true);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      toast.error("Image must be smaller than 2MB");
-      e.target.value = ''; 
+      toast.error('Image must be smaller than 2MB');
+      e.target.value = '';
       return;
     }
     setImageFile(file);
   };
 
-  // --- DISH ACTIONS ---
-  const handleAddItem = async (e: React.FormEvent) => {
+  // Save Dish (Create or Update)
+  const handleSaveDish = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
-    let finalImageUrl = null;
-    
-    try {
-      if (imageFile) {
-        setIsUploadingImage(true);
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${vendorId}-${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from('menu-items')
-          .upload(fileName, imageFile);
-
-        if (uploadError) throw new Error("Failed to upload image");
-        const { data } = supabase.storage.from('menu-items').getPublicUrl(fileName);
-        finalImageUrl = data.publicUrl;
-        setIsUploadingImage(false);
-      }
-
-      const token = await getToken(); 
-      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ 
-          name, 
-          category, 
-          price: Number(price), 
-          prep, 
-          veg, 
-          available: true, 
-          imageUrl: finalImageUrl,
-          description: description || null,
-          costPrice: costPrice ? Number(costPrice) : null,
-          remarks: remarks || null,
-          badgeLabel: badgeLabel || null
-        }),
-      });
-
-      if (res.ok) {
-        toast.success("Item added to menu!");
-        setShowAddModal(false);
-        fetchMenu(); 
-        setName(''); setPrice(''); setPrep('10 min'); setImageFile(null);
-        setDescription(''); setCostPrice(''); setRemarks(''); setBadgeLabel('');
-        
-        const fileInput = document.getElementById('image-upload') as HTMLInputElement;
-        if (fileInput) fileInput.value = '';
-      } else {
-        throw new Error("Failed to save to database");
-      }
-    } catch (error: any) {
-      toast.error(error.message || "Error adding item");
-      setIsUploadingImage(false);
-    } finally {
-      setIsSaving(false);
+    if (!dishName.trim() || !dishPrice) {
+      toast.error('Add a name and price');
+      return;
     }
-  };
 
-  const handleUpdateItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingItem) return;
     setIsSaving(true);
+    let finalImageUrl = editingItem ? editingItem.imageUrl : null;
 
     try {
-      let finalImageUrl = editingItem.imageUrl;
-
       if (imageFile) {
         setIsUploadingImage(true);
         const fileExt = imageFile.name.split('.').pop();
@@ -266,548 +204,949 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
           .from('menu-items')
           .upload(fileName, imageFile);
 
-        if (uploadError) throw new Error("Image upload mismatch");
+        if (uploadError) throw new Error('Failed to upload image');
         const { data } = supabase.storage.from('menu-items').getPublicUrl(fileName);
         finalImageUrl = data.publicUrl;
         setIsUploadingImage(false);
       }
 
       const token = await getToken();
-      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${editingItem.id}`, {
-        method: 'PATCH', 
+      const payload = {
+        name: dishName.trim(),
+        category: dishCategory,
+        price: Number(dishPrice),
+        prep: dishPrep,
+        veg: dishVeg,
+        available: editingItem ? editingItem.available : true,
+        imageUrl: finalImageUrl,
+        description: dishDescription.trim() || null,
+        costPrice: dishCostPrice ? Number(dishCostPrice) : null,
+        remarks: dishRemarks.trim() || null,
+        badgeLabel: dishBadgeLabel.trim() || null,
+      };
+
+      const url = editingItem
+        ? `${API_URL}/api/vendors/${vendorId}/menu/${editingItem.id}`
+        : `${API_URL}/api/vendors/${vendorId}/menu`;
+
+      const method = editingItem ? 'PATCH' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          ...editingItem,
-          price: Number(editingItem.price),
-          costPrice: editingItem.costPrice ? Number(editingItem.costPrice) : null,
-          imageUrl: finalImageUrl
-        })
+        body: JSON.stringify(payload),
       });
 
-      if (res.ok) {
-        toast.success("Menu updated!");
-        setEditingItem(null);
-        setImageFile(null);
-        fetchMenu();
-      } else {
-        throw new Error("Backend synchronization error");
-      }
-    } catch (error: any) {
-      toast.error(error.message || "Failed to update item");
+      if (!res.ok) throw new Error('Database sync failed');
+
+      toast.success(editingItem ? 'Dish updated!' : 'New dish added!');
+      setShowDishModal(false);
+      fetchMenu();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error saving dish';
+      toast.error(msg);
       setIsUploadingImage(false);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const toggleAvailable = async (itemId: string, currentStatus: boolean) => {
+  // Instant Availability Toggle Switch
+  const toggleAvailable = async (item: MenuItem) => {
     try {
-      const token = await getToken(); 
-      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${itemId}`, {
+      const token = await getToken();
+      const updatedStatus = !item.available;
+
+      setItems((prev) =>
+        prev.map((i) => (i.id === item.id ? { ...i, available: updatedStatus } : i))
+      );
+
+      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${item.id}`, {
         method: 'PATCH',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ available: !currentStatus }),
+        body: JSON.stringify({ available: updatedStatus }),
       });
 
-      if (res.ok) {
-        toast.success(currentStatus ? "Marked Out of Stock" : "Marked In Stock");
-        setItems(items.map(item => item.id === itemId ? { ...item, available: !currentStatus } : item));
+      if (!res.ok) {
+        throw new Error('Failed to update status');
       }
-    } catch (error) {
-      toast.error("Failed to update status");
+
+      toast.success(updatedStatus ? `${item.name} is In Stock` : `${item.name} marked Sold Out`);
+    } catch {
+      toast.error('Failed to change stock status');
+      fetchMenu();
     }
   };
 
-  const deleteItem = async (itemId: string) => {
-    if (!window.confirm("Are you sure you want to delete this item?")) return;
+  // Delete Dish
+  const handleDeleteDish = async (itemId: string) => {
+    if (!window.confirm('Are you sure you want to delete this dish?')) return;
+
     try {
-      const token = await getToken(); 
+      const token = await getToken();
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${itemId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (res.ok) {
-        toast.success("Item deleted");
-        setItems(items.filter(item => item.id !== itemId));
-        setEditingItem(null); 
+        toast.success('Dish deleted');
+        setItems((prev) => prev.filter((i) => i.id !== itemId));
+        setShowDishModal(false);
       }
-    } catch (error) {
-      toast.error("Failed to delete item");
+    } catch {
+      toast.error('Failed to delete dish');
     }
   };
 
-  // --- 📦 RAW INVENTORY ACTIONS ---
+  // Add Raw Ingredient
   const handleAddRawItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!rawName.trim()) return toast.error("Provide an item name");
+    if (!rawName.trim()) return toast.error('Enter an ingredient name');
     setIsSavingRaw(true);
 
     try {
       const token = await getToken();
       const stockQty = Number(rawStock) || 0;
       const totalCostPaid = Number(rawCost) || 0;
-      const calculatedCostPerUnit = stockQty > 0 ? totalCostPaid / stockQty : 0;
+      const costPerUnit = stockQty > 0 ? totalCostPaid / stockQty : 0;
+
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/inventory`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
+          Authorization: `Bearer ${token}`,
         },
-
         body: JSON.stringify({
-          name: rawName,
+          name: rawName.trim(),
           unit: rawUnit,
           currentStock: stockQty,
           minAlert: Number(rawAlert) || 0,
-          costPerUnit: calculatedCostPerUnit,
-          totalPurchaseCost: totalCostPaid
-        })
+          costPerUnit,
+          totalPurchaseCost: totalCostPaid,
+        }),
       });
 
       if (res.ok) {
-        toast.success("Stock registered in pantry");
+        toast.success('Ingredient added to pantry');
         setRawName('');
         setRawStock('');
         setRawCost('');
+        setShowAddRawModal(false);
         fetchInventory();
       } else {
-        toast.error("Failed to register stock item");
+        toast.error('Failed to add ingredient');
       }
-    } catch (err) {
-      toast.error("Network error adding stock");
+    } catch {
+      toast.error('Network error adding stock');
     } finally {
       setIsSavingRaw(false);
     }
   };
 
-  // --- 🔗 RECIPE BUILDER ACTIONS ---
+  // Refill Submit
+  const handleRefillSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refillItem || !refillQty) return;
+    setIsSubmittingRefill(true);
+
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${API_URL}/api/vendors/${vendorId}/inventory/${refillItem.id}/restock`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            quantityToAdd: Number(refillQty),
+            totalPurchaseCost: Number(refillCost) || 0,
+          }),
+        }
+      );
+
+      if (res.ok) {
+        toast.success(`Refilled ${refillItem.name}! Added to P&L.`);
+        setRefillItem(null);
+        setRefillQty('');
+        setRefillCost('');
+        fetchInventory();
+        fetchMenu();
+      } else {
+        toast.error('Refill failed');
+      }
+    } catch {
+      toast.error('Network error refilling stock');
+    } finally {
+      setIsSubmittingRefill(false);
+    }
+  };
+
+  // Open Recipe Modal
   const openRecipeModal = async (dish: MenuItem) => {
-    setRecipeItem(dish);
+    setRecipeDish(dish);
     try {
       const token = await getToken();
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${dish.id}/recipe`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
         setRecipeIngredients(
-          data.recipe?.map((r: any) => ({
+          data.recipe?.map((r: { inventoryItemId: string; quantityUsed: number }) => ({
             inventoryItemId: r.inventoryItemId,
-            quantityUsed: r.quantityUsed
+            quantityUsed: r.quantityUsed,
           })) || []
         );
       }
-    } catch (err) {
+    } catch {
       setRecipeIngredients([]);
     }
   };
 
+  // Save Recipe
   const handleSaveRecipe = async () => {
-    if (!recipeItem) return;
+    if (!recipeDish) return;
     setIsSavingRecipe(true);
 
     try {
       const token = await getToken();
-      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${recipeItem.id}/recipe`, {
+      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu/${recipeDish.id}/recipe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ ingredients: recipeIngredients })
+        body: JSON.stringify({ ingredients: recipeIngredients }),
       });
 
       if (res.ok) {
-        toast.success("Recipe mapped to stock!");
-        setRecipeItem(null);
+        toast.success('Recipe linked to pantry stock!');
+        setRecipeDish(null);
       } else {
-        toast.error("Failed to link ingredients");
+        toast.error('Failed to link recipe');
       }
-    } catch (err) {
-      toast.error("Network error");
+    } catch {
+      toast.error('Network error saving recipe');
     } finally {
       setIsSavingRecipe(false);
     }
   };
 
-  if (isLoading) return <div className="p-8 text-gray-400 animate-pulse">Loading menu configuration...</div>;
+  if (isLoading) {
+    return (
+      <div className="p-8 text-center text-[#9A9184] font-semibold text-sm">
+        Loading menu configuration…
+      </div>
+    );
+  }
+
+  const hasLowStock = rawItems.some((i) => Number(i.currentStock) <= Number(i.minAlert));
 
   return (
-    <div className="p-8 max-w-5xl font-sans relative">
+    <div className="max-w-4xl mx-auto text-[#F5F0E8] font-sans pb-28 md:pb-12">
       
-      {/* HEADER & SUB-TABS */}
-      <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-gray-800 pb-4">
-        <div>
-          <h2 className="text-3xl font-serif text-[#E5B35C] mb-1">Menu & Stock Manager</h2>
-          <p className="text-xs text-gray-400">Manage customer-facing items and underlying raw inventory.</p>
-        </div>
-
-        {/* 🌟 SUB-TAB SWITCH WITH ALERT INDICATOR */}
-        <div className="flex bg-[#13161F] p-1 rounded-xl border border-[#1F2330]">
-          <button 
+      {/* 1. Prototype Top Pill Segment (`.seg`) */}
+      <div className="flex justify-between items-center flex-wrap gap-3 pb-3 border-b border-[#3A352E]">
+        <div className="inline-flex border border-[#3A352E] rounded-full overflow-hidden bg-[#1C1A18] p-0.5">
+          <button
             onClick={() => setActiveTab('dishes')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-              activeTab === 'dishes' 
-                ? 'bg-[#E5B35C] text-black shadow-md' 
-                : 'text-gray-400 hover:text-white'
+            className={`min-h-[40px] px-5 rounded-full text-sm font-semibold transition-colors ${
+              activeTab === 'dishes'
+                ? 'bg-[#F5F0E8] text-[#121110]'
+                : 'text-[#9A9184] hover:text-[#F5F0E8]'
             }`}
           >
-            🍳 Dish Catalog ({items.length})
+            Dishes ({items.length})
           </button>
-          
-          <button 
+
+          <button
             onClick={() => setActiveTab('inventory')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
-              activeTab === 'inventory' 
-                ? 'bg-[#E5B35C] text-black shadow-md' 
-                : 'text-gray-400 hover:text-white'
+            className={`min-h-[40px] px-5 rounded-full text-sm font-semibold flex items-center gap-2 transition-colors ${
+              activeTab === 'inventory'
+                ? 'bg-[#F5F0E8] text-[#121110]'
+                : 'text-[#9A9184] hover:text-[#F5F0E8]'
             }`}
           >
-            <span>📦 Raw Stock / Pantry ({rawItems.length})</span>
-            {rawItems.some(i => Number(i.currentStock) <= Number(i.minAlert)) && (
-              <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">
-                !
-              </span>
+            <span>Pantry Stock ({rawItems.length})</span>
+            {hasLowStock && (
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             )}
           </button>
         </div>
+
+        {/* Action Button */}
+        {activeTab === 'dishes' ? (
+          <button
+            onClick={openAddDish}
+            className="min-h-[44px] px-5 rounded-full bg-[#F5F0E8] text-[#121110] font-semibold text-sm hover:opacity-90 active:scale-95 transition-all shadow-sm"
+          >
+            + Add a dish
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowAddRawModal(true)}
+            className="min-h-[44px] px-5 rounded-full bg-[#F5F0E8] text-[#121110] font-semibold text-sm hover:opacity-90 active:scale-95 transition-all shadow-sm"
+          >
+            + Add raw item
+          </button>
+        )}
       </div>
 
       {/* ============================================================== */}
-      {/* 🍳 VIEW 1: DISH CATALOG (Table First, Form in Modal)           */}
+      {/* TAB 1: DISHES (Prototype `.mrow` List with `.tog` & `.sw`)     */}
       {/* ============================================================== */}
       {activeTab === 'dishes' && (
-        <div className="flex flex-col gap-4">
-          
-          {/* TOP ACTION BAR */}
-          <div className="flex justify-between items-center bg-[#13161F] border border-[#1F2330] p-4 rounded-xl">
-            <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider">Active Dishes</h3>
-              <p className="text-xs text-gray-500">Showing {items.length} items configured on your counter</p>
+        <div className="mt-4">
+          {items.length === 0 ? (
+            <div className="p-12 text-center text-[#9A9184] text-sm">
+              No dishes on the menu yet. Tap &quot;+ Add a dish&quot; to begin.
             </div>
-            <button 
-              onClick={() => setShowAddModal(true)}
-              className="bg-[#E5B35C] hover:bg-[#d4a24b] text-[#0B0E14] font-black text-xs px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-lg"
-            >
-              + Add New Dish
-            </button>
-          </div>
+          ) : (
+            CATEGORIES.map((cat) => {
+              const categoryItems = items.filter((it) => it.category === cat);
+              if (categoryItems.length === 0) return null;
 
-          {/* --- LIVE MENU LIST (NOW AT THE TOP) --- */}
-          <div className="bg-[#13161F] border border-[#1F2330] rounded-2xl shadow-xl overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-[#0B0E14] border-b border-[#1F2330] text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  <th className="p-4 w-16">Image</th>
-                  <th className="p-4">Item</th>
-                  <th className="p-4">Category</th>
-                  <th className="p-4">Price</th>
-                  <th className="p-4 text-center">Status</th>
-                  <th className="p-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#1F2330]">
-                {items.length === 0 ? (
-                  <tr><td colSpan={6} className="p-8 text-center text-gray-500">No items on the menu yet.</td></tr>
-                ) : (
-                  items.map((item) => (
-                    <tr key={item.id} className="hover:bg-[#1a1f2b] transition-colors">
-                      <td className="p-4">
-                        {item.imageUrl ? (
-                          <img src={item.imageUrl} alt={item.name} className="w-10 h-10 object-cover rounded-md border border-gray-700" />
-                        ) : (
-                          <div className="w-10 h-10 bg-gray-800 rounded-md flex items-center justify-center text-lg opacity-50">
-                            {item.veg ? '🥗' : '🍗'}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px]">{item.veg ? '🟢' : '🔴'}</span>
-                          <span className="text-white font-medium">{item.name}</span>
-                          {item.badgeLabel && <span className="bg-red-500/20 text-red-400 text-[9px] px-1.5 py-0.5 rounded font-bold">{item.badgeLabel}</span>}
+              return (
+                <div key={cat} className="mb-6">
+                  {/* Category Header (`.grp`) */}
+                  <div className="text-xs font-bold uppercase tracking-wider text-[#9A9184] px-4 py-2 bg-[#1C1A18] border-y border-[#3A352E]">
+                    {cat} · {categoryItems.length}
+                  </div>
+
+                  {/* Dish Rows (`.mrow`) */}
+                  <div className="divide-y divide-[#3A352E]">
+                    {categoryItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="grid grid-cols-[16px_1fr_auto] gap-3 items-center min-h-[64px] px-4 py-2 hover:bg-[#1C1A18]/50 transition-colors"
+                      >
+                        {/* Veg / Non-Veg Mark (`.vs`) */}
+                        <span
+                          role="img"
+                          aria-label={item.veg ? 'Veg' : 'Non-veg'}
+                          className={`w-4 h-4 border-[1.5px] rounded-[2px] inline-grid place-items-center shrink-0 ${
+                            item.veg ? 'border-[#34B866]' : 'border-[#C77A45]'
+                          }`}
+                        >
+                          <span
+                            className={
+                              item.veg
+                                ? 'w-[7px] h-[7px] rounded-full bg-[#34B866]'
+                                : 'w-[8px] h-[7px] bg-[#C77A45] [clip-path:polygon(50%_0,100%_100%,0_100%)]'
+                            }
+                          />
+                        </span>
+
+                        {/* Dish Details Button (`.mname`) */}
+                        <button
+                          onClick={() => openEditDish(item)}
+                          className="block w-full text-left min-h-[52px] py-1 truncate"
+                        >
+                          <b className="block font-semibold text-base leading-snug text-white truncate">
+                            {item.name}
+                            {item.badgeLabel && (
+                              <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
+                                {item.badgeLabel}
+                              </span>
+                            )}
+                          </b>
+                          <span
+                            className={`text-sm tabular-nums ${
+                              item.available ? 'text-[#C7BFB2]' : 'text-[#9A9184] font-semibold'
+                            }`}
+                          >
+                            ₹{item.price} · {item.prep}
+                            {!item.available && ' · Sold out today'}
+                          </span>
+                        </button>
+
+                        {/* Actions: Recipe Button + Prototype Toggle Switch (`.tog`) */}
+                        <div className="flex items-center gap-3 shrink-0">
+                          <button
+                            onClick={() => openRecipeModal(item)}
+                            className="min-h-[36px] px-3 rounded-full border border-[#3A352E] bg-[#1C1A18] text-xs font-semibold text-[#C7BFB2] hover:text-white transition-colors"
+                          >
+                            🔗 Recipe
+                          </button>
+
+                          <button
+                            onClick={() => toggleAvailable(item)}
+                            aria-pressed={item.available}
+                            aria-label={`Toggle availability for ${item.name}`}
+                            className="flex items-center min-h-[56px]"
+                          >
+                            <span
+                              className={`w-11 h-6 rounded-full relative transition-colors ${
+                                item.available ? 'bg-[#34B866]' : 'bg-[#3A352E]'
+                              }`}
+                            >
+                              <span
+                                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                                  item.available ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </span>
+                          </button>
                         </div>
-                      </td>
-                      <td className="p-4 text-sm text-gray-400">{item.category}</td>
-                      <td className="p-4 text-sm text-[#E5B35C] font-bold">₹{item.price}</td>
-                      <td className="p-4 text-center">
-                        <button onClick={() => toggleAvailable(item.id, item.available)} className={`text-xs px-3 py-1 rounded-full font-bold transition-colors ${item.available ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20' : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'}`}>
-                          {item.available ? 'In Stock' : 'Out of Stock'}
-                        </button>
-                      </td>
-                      <td className="p-4 text-right flex justify-end gap-3 items-center">
-                        <button onClick={() => openRecipeModal(item)} className="text-xs bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 px-2.5 py-1 rounded-md border border-gray-700 transition-colors">
-                          🔗 Recipe
-                        </button>
-                        <button onClick={() => setEditingItem(item)} className="text-sm text-[#E5B35C] hover:underline font-medium">
-                          Edit
-                        </button>
-                        <button onClick={() => deleteItem(item.id)} className="text-sm text-gray-500 hover:text-red-400 transition-colors">
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* --- ADD DISH POPUP MODAL (HIDDEN BY DEFAULT) --- */}
-          {showAddModal && (
-            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-[#13161F] border border-gray-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar">
-                
-                <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
-                  <div>
-                    <h3 className="text-xl font-black text-white">Add New Dish</h3>
-                    <p className="text-xs text-gray-500">Configure item pricing, kitchen prep time, and visibility</p>
+                      </div>
+                    ))}
                   </div>
-                  <button 
-                    onClick={() => setShowAddModal(false)}
-                    className="text-gray-400 hover:text-white text-xl font-bold w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5"
-                  >
-                    ✕
-                  </button>
                 </div>
-
-                <form onSubmit={handleAddItem} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Item Name</label>
-                      <input type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Tandoori Roti" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Price (₹)</label>
-                      <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} required min="1" placeholder="0" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Prep Time</label>
-                      <input type="text" value={prep} onChange={(e) => setPrep(e.target.value)} required placeholder="e.g. 10 min" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Category</label>
-                      <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none">
-                        <option>Food</option>
-                        <option>Snacks</option>
-                        <option>Drinks</option>
-                        <option>Dessert</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Dietary Type</label>
-                      <select value={veg ? "veg" : "non-veg"} onChange={(e) => setVeg(e.target.value === "veg")} className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none">
-                        <option value="veg">🟢 Veg</option>
-                        <option value="non-veg">🔴 Non-Veg</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Description</label>
-                      <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Rich buttery bhaji with soft pavs" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Cost Price (₹)</label>
-                      <input type="number" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} placeholder="e.g. 28" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Remarks</label>
-                      <input type="text" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Regular spicy, Less spicy" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Badge Label</label>
-                      <input type="text" value={badgeLabel} onChange={(e) => setBadgeLabel(e.target.value)} placeholder="e.g. Best Seller" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Item Photo (Optional)</label>
-                    <input id="image-upload" type="file" accept="image/*" onChange={handleFileChange} className="w-full bg-[#0B0E14] border border-gray-700 text-gray-400 rounded-lg p-2 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#E5B35C] file:text-[#0B0E14] hover:file:bg-[#d4a24b] cursor-pointer" />
-                  </div>
-
-                  <div className="flex gap-3 pt-4 border-t border-[#1F2330]">
-                    <button type="submit" disabled={isSaving || isUploadingImage} className="flex-1 bg-[#E5B35C] text-[#0B0E14] font-black py-3 rounded-xl text-sm hover:bg-[#d4a24b] transition-all disabled:opacity-50">
-                      {isUploadingImage ? 'Uploading...' : isSaving ? 'Saving...' : 'Save & Publish Dish'}
-                    </button>
-                    <button type="button" onClick={() => setShowAddModal(false)} className="px-6 py-3 bg-gray-800 text-gray-400 font-bold text-sm rounded-xl hover:bg-gray-700 transition-colors">
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-
-              </div>
-            </div>
+              );
+            })
           )}
-
         </div>
       )}
 
       {/* ============================================================== */}
-      {/* 📦 VIEW 2: RAW STOCK / PANTRY (Inventory Pool)                 */}
+      {/* TAB 2: PANTRY STOCK (Prototype `.ing` Rows & Low Alerts)       */}
       {/* ============================================================== */}
       {activeTab === 'inventory' && (
-        <div>
-          {/* Add Raw Item Form */}
-          <form onSubmit={handleAddRawItem} className="bg-[#13161F] border border-[#1F2330] rounded-2xl p-6 shadow-xl mb-8">
-            <h3 className="text-lg font-bold text-gray-200 mb-2">Register Raw Ingredient</h3>
-            <p className="text-xs text-gray-500 mb-4">Stock registered here can be linked to your dishes or counted for packaged items.</p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Ingredient Name</label>
-                <input type="text" value={rawName} onChange={(e) => setRawName(e.target.value)} required placeholder="e.g. Sandwich Bread, Dairy Milk" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Strict Base Unit</label>
-                <select value={rawUnit} onChange={(e) => setRawUnit(e.target.value as any)} className="w-full bg-[#0B0E14] border border-gray-700 text-[#E5B35C] font-bold rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none">
-                  <option value="pcs">pcs (buns, cans, slices)</option>
-                  <option value="g">g (solids: butter, flour)</option>
-                  <option value="ml">ml (liquids: milk, oil)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Initial Stock</label>
-                <input type="number" value={rawStock} onChange={(e) => setRawStock(e.target.value)} required placeholder="e.g. 50" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Total Paid (₹)</label>
-                <input 
-                  type="number" 
-                  value={rawCost} 
-                  onChange={(e) => setRawCost(e.target.value)} 
-                  placeholder="e.g. 220" 
-                  className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" 
-                />
-                {rawStock && rawCost && (
-                  <span className="text-[10px] text-gray-500 mt-1 block">
-                    ≈ ₹{(Number(rawCost) / Number(rawStock)).toFixed(3)}/{rawUnit}
-                  </span>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Min. Alert Level</label>
-                <input type="number" value={rawAlert} onChange={(e) => setRawAlert(e.target.value)} required placeholder="10" className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] focus:outline-none" />
-              </div>
+        <div className="mt-4">
+          {rawItems.length === 0 ? (
+            <div className="p-12 text-center text-[#9A9184] text-sm">
+              No raw ingredients tracked. Tap &quot;+ Add raw item&quot; to register milk, bread, or tea.
             </div>
+          ) : (
+            <div className="divide-y divide-[#3A352E] border-t border-[#3A352E]">
+              {rawItems.map((item) => {
+                const isLow = Number(item.currentStock) <= Number(item.minAlert);
 
-            <div className="flex justify-end mt-4 pt-4 border-t border-[#1F2330]">
-              <button type="submit" disabled={isSavingRaw} className="bg-[#E5B35C] text-black font-bold py-2.5 px-6 rounded-lg text-sm hover:bg-[#d4a24b] transition-all disabled:opacity-50">
-                {isSavingRaw ? 'Registering...' : '+ Add to Stock Pool'}
+                return (
+                  <div
+                    key={item.id}
+                    className="grid grid-cols-[1fr_auto] gap-3 items-center min-h-[72px] px-4 py-2.5 hover:bg-[#1C1A18]/50 transition-colors"
+                  >
+                    <div>
+                      <b className="text-base font-semibold text-white">{item.name}</b>
+                      <span className="text-xs text-[#9A9184] block mt-0.5">
+                        ₹{item.costPerUnit ? item.costPerUnit.toFixed(2) : '0.00'}/{item.unit} · Alert at {item.minAlert} {item.unit}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-right">
+                      <div>
+                        <div
+                          className={`text-2xl font-bold tabular-nums ${
+                            isLow ? 'text-amber-400' : 'text-white'
+                          }`}
+                        >
+                          {item.currentStock}{' '}
+                          <span className="text-xs text-[#9A9184] font-normal">{item.unit}</span>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                            isLow ? 'bg-amber-500/20 text-amber-300' : 'bg-[#15291B] text-[#5CC97B]'
+                          }`}
+                        >
+                          {isLow ? 'Low Stock' : 'Healthy'}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setRefillItem(item);
+                          setRefillQty('');
+                          setRefillCost('');
+                        }}
+                        className="min-h-[36px] px-3.5 rounded-full bg-[#E5B35C] text-[#1A1206] font-semibold text-xs active:scale-95 transition-transform"
+                      >
+                        + Refill
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* 🌟 PROTOTYPE BOTTOM SHEET: ADD / EDIT DISH (`.sheet`)          */}
+      {/* ============================================================== */}
+      {showDishModal && (
+        <div
+          onClick={() => setShowDishModal(false)}
+          className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-[#1C1A18] rounded-t-[20px] sm:rounded-2xl border border-[#3A352E] p-5 shadow-2xl max-h-[88vh] overflow-y-auto no-scrollbar space-y-4"
+          >
+            <div className="w-9 h-1 rounded-full bg-[#3A352E] mx-auto sm:hidden" />
+
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-semibold text-white">
+                {editingItem ? 'Edit dish' : 'New dish'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowDishModal(false)}
+                className="w-8 h-8 rounded-full bg-[#26231F] text-[#9A9184] hover:text-white flex items-center justify-center font-bold"
+              >
+                ✕
               </button>
             </div>
-          </form>
 
-          {/* Raw Stock Table */}
-          <div className="bg-[#13161F] border border-[#1F2330] rounded-2xl shadow-xl overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-[#0B0E14] border-b border-[#1F2330] text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  <th className="p-4">Raw Ingredient</th>
-                  <th className="p-4">Base Unit</th>
-                  <th className="p-4">Current Stock</th>
-                  <th className="p-4">Unit Cost</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#1F2330]">
-                {rawItems.length === 0 ? (
-                  <tr><td colSpan={4} className="p-8 text-center text-gray-500">No raw ingredients tracked. Register bread, milk, or butter above.</td></tr>
-                ) : (
-                  rawItems.map((item) => {
-                    const isLow = item.currentStock <= item.minAlert;
-                    return (
-                      <tr key={item.id} className="hover:bg-[#1a1f2b] transition-colors">
-                        <td className="p-4 font-medium text-white">{item.name}</td>
-                        <td className="p-4 text-sm text-gray-400 font-mono">
-                          ₹{item.costPerUnit ? item.costPerUnit.toFixed(2) : '0.00'} / {item.unit}</td>
-                        <td className="p-4 text-xs text-gray-400 font-mono uppercase">{item.unit}</td>
-                        <td className="p-4 text-sm font-bold text-white">
-                          {item.currentStock} <span className="text-gray-500 text-xs font-normal">{item.unit}</span>
-                        </td>
-                        <td className="p-4">
-                          <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                            isLow ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
-                          }`}>
-                            {isLow ? 'Low Stock' : 'Healthy'}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <button 
-                           onClick={() => setRefillItem(item)}
-                           className="bg-[#E5B35C] hover:bg-[#d4a24b] text-black font-bold text-xs px-3 py-1.5 rounded-lg transition-all active:scale-95"
-                          >
-                          + Refill
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
+            <form onSubmit={handleSaveDish} className="space-y-4">
+              {/* Dish Name */}
+              <div>
+                <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                  Dish name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Vada Pav"
+                  value={dishName}
+                  onChange={(e) => setDishName(e.target.value)}
+                  className="w-full h-12 rounded-lg border border-[#3A352E] bg-[#26231F] px-3.5 text-base text-[#F5F0E8] outline-none focus:border-[#E5B35C]"
+                />
+              </div>
+
+              {/* Price & Prep */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                    Price (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    placeholder="25"
+                    value={dishPrice}
+                    onChange={(e) => setDishPrice(e.target.value)}
+                    className="w-full h-12 rounded-lg border border-[#3A352E] bg-[#26231F] px-3.5 text-base text-[#F5F0E8] outline-none focus:border-[#E5B35C]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                    Prep time
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="5 min"
+                    value={dishPrep}
+                    onChange={(e) => setDishPrep(e.target.value)}
+                    className="w-full h-12 rounded-lg border border-[#3A352E] bg-[#26231F] px-3.5 text-base text-[#F5F0E8] outline-none focus:border-[#E5B35C]"
+                  />
+                </div>
+              </div>
+
+              {/* Dietary Picker (`.vegpick`) */}
+              <div>
+                <span className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                  Dietary type
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDishVeg(true)}
+                    className={`min-h-[52px] rounded-xl border flex items-center justify-center gap-2 font-semibold text-sm transition-all ${
+                      dishVeg
+                        ? 'border-2 border-[#F5F0E8] bg-[#26231F] text-white'
+                        : 'border-[#3A352E] bg-[#1C1A18] text-[#9A9184]'
+                    }`}
+                  >
+                    <span className="w-3.5 h-3.5 border border-[#34B866] rounded-[2px] flex items-center justify-center">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#34B866]" />
+                    </span>
+                    <span>Veg</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDishVeg(false)}
+                    className={`min-h-[52px] rounded-xl border flex items-center justify-center gap-2 font-semibold text-sm transition-all ${
+                      !dishVeg
+                        ? 'border-2 border-[#F5F0E8] bg-[#26231F] text-white'
+                        : 'border-[#3A352E] bg-[#1C1A18] text-[#9A9184]'
+                    }`}
+                  >
+                    <span className="w-3.5 h-3.5 border border-[#C77A45] rounded-[2px] flex items-center justify-center">
+                      <span className="w-1.5 h-1.5 bg-[#C77A45] [clip-path:polygon(50%_0,100%_100%,0_100%)]" />
+                    </span>
+                    <span>Non-veg</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Category Chips */}
+              <div>
+                <span className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">Category</span>
+                <div className="flex gap-2 flex-wrap">
+                  {CATEGORIES.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setDishCategory(cat)}
+                      className={`min-h-[40px] px-4 rounded-full border text-sm font-semibold transition-colors ${
+                        dishCategory === cat
+                          ? 'bg-[#F5F0E8] text-[#121110] border-[#F5F0E8]'
+                          : 'bg-[#26231F] text-[#C7BFB2] border-[#3A352E]'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                  Description
+                </label>
+                <input
+                  type="text"
+                  placeholder="Spicy potato vada with dry garlic chutney"
+                  value={dishDescription}
+                  onChange={(e) => setDishDescription(e.target.value)}
+                  className="w-full h-12 rounded-lg border border-[#3A352E] bg-[#26231F] px-3.5 text-sm text-[#F5F0E8] outline-none focus:border-[#E5B35C]"
+                />
+              </div>
+
+              {/* Photo Upload */}
+              <div>
+                <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                  Dish photo (Optional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="w-full bg-[#26231F] border border-[#3A352E] text-xs text-[#9A9184] rounded-lg p-2.5 file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#E5B35C] file:text-[#1A1206] cursor-pointer"
+                />
+              </div>
+
+              {/* Expandable Options Toggle */}
+              {!showMoreOptions ? (
+                <button
+                  type="button"
+                  onClick={() => setShowMoreOptions(true)}
+                  className="text-xs font-semibold text-[#E5B35C] hover:underline block pt-1"
+                >
+                  More options (cost price, badge label) ▾
+                </button>
+              ) : (
+                <div className="space-y-3 pt-2 border-t border-[#3A352E]">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-[#C7BFB2] mb-1">
+                        Cost to make (₹)
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 12"
+                        value={dishCostPrice}
+                        onChange={(e) => setDishCostPrice(e.target.value)}
+                        className="w-full h-11 rounded-lg border border-[#3A352E] bg-[#26231F] px-3 text-sm text-white outline-none focus:border-[#E5B35C]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[#C7BFB2] mb-1">
+                        Badge label
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Bestseller"
+                        value={dishBadgeLabel}
+                        onChange={(e) => setDishBadgeLabel(e.target.value)}
+                        className="w-full h-11 rounded-lg border border-[#3A352E] bg-[#26231F] px-3 text-sm text-white outline-none focus:border-[#E5B35C]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="pt-3 border-t border-[#3A352E] flex gap-2">
+                <button
+                  type="submit"
+                  disabled={isSaving || isUploadingImage}
+                  className="flex-1 h-[52px] rounded-xl bg-[#E5B35C] text-[#1A1206] font-semibold text-[17px] active:scale-[0.98] transition-transform disabled:opacity-50"
+                >
+                  {isUploadingImage
+                    ? 'Uploading image…'
+                    : isSaving
+                    ? 'Saving…'
+                    : editingItem
+                    ? 'Save changes'
+                    : 'Add dish'}
+                </button>
+
+                {editingItem && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteDish(editingItem.id)}
+                    className="px-4 h-[52px] rounded-xl border border-red-500/40 text-red-400 font-semibold text-sm hover:bg-red-950/20 active:scale-95 transition-all"
+                  >
+                    Delete
+                  </button>
                 )}
-              </tbody>
-            </table>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
       {/* ============================================================== */}
-      {/* 🔗 MODAL: RECIPE BUILDER (Map ingredients to Dish)             */}
+      {/* 🌟 PROTOTYPE BOTTOM SHEET: ADD RAW INGREDIENT                  */}
       {/* ============================================================== */}
-      {recipeItem && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#13161F] border border-gray-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
-            <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-3">
-              <div>
-                <h3 className="text-lg font-bold text-white">Recipe: {recipeItem.name}</h3>
-                <p className="text-xs text-gray-500">Define raw stock consumed per single plate/order.</p>
-              </div>
-              <button onClick={() => setRecipeItem(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
+      {showAddRawModal && (
+        <div
+          onClick={() => setShowAddRawModal(false)}
+          className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-[#1C1A18] rounded-t-[20px] sm:rounded-2xl border border-[#3A352E] p-5 shadow-2xl max-h-[85vh] overflow-y-auto no-scrollbar space-y-4"
+          >
+            <div className="w-9 h-1 rounded-full bg-[#3A352E] mx-auto sm:hidden" />
+
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-semibold text-white">Add raw item</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddRawModal(false)}
+                className="w-8 h-8 rounded-full bg-[#26231F] text-[#9A9184] hover:text-white flex items-center justify-center font-bold"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="space-y-3 max-h-60 overflow-y-auto no-scrollbar mb-4">
+            <form onSubmit={handleAddRawItem} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                  Ingredient name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Milk, Sandwich Pav, Potatoes"
+                  value={rawName}
+                  onChange={(e) => setRawName(e.target.value)}
+                  className="w-full h-12 rounded-lg border border-[#3A352E] bg-[#26231F] px-3.5 text-base text-[#F5F0E8] outline-none focus:border-[#E5B35C]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                    Base unit
+                  </label>
+                  <select
+                    value={rawUnit}
+                    onChange={(e) => setRawUnit(e.target.value as 'g' | 'ml' | 'pcs')}
+                    className="w-full h-12 rounded-lg border border-[#3A352E] bg-[#26231F] px-3 text-sm text-[#E5B35C] font-semibold outline-none focus:border-[#E5B35C]"
+                  >
+                    <option value="pcs">pcs (buns, eggs, slices)</option>
+                    <option value="ml">ml (milk, oil, syrups)</option>
+                    <option value="g">g (potatoes, butter, flour)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                    Initial stock ({rawUnit})
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="e.g. 50"
+                    value={rawStock}
+                    onChange={(e) => setRawStock(e.target.value)}
+                    className="w-full h-12 rounded-lg border border-[#3A352E] bg-[#26231F] px-3.5 text-base text-[#F5F0E8] outline-none focus:border-[#E5B35C]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                    Total paid (₹)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 250"
+                    value={rawCost}
+                    onChange={(e) => setRawCost(e.target.value)}
+                    className="w-full h-12 rounded-lg border border-[#3A352E] bg-[#26231F] px-3.5 text-base text-[#F5F0E8] outline-none focus:border-[#E5B35C]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                    Min alert level ({rawUnit})
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="10"
+                    value={rawAlert}
+                    onChange={(e) => setRawAlert(e.target.value)}
+                    className="w-full h-12 rounded-lg border border-[#3A352E] bg-[#26231F] px-3.5 text-base text-[#F5F0E8] outline-none focus:border-[#E5B35C]"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSavingRaw}
+                className="w-full h-[52px] rounded-xl bg-[#E5B35C] text-[#1A1206] font-semibold text-[17px] active:scale-[0.98] transition-transform disabled:opacity-50 mt-2"
+              >
+                {isSavingRaw ? 'Saving…' : 'Register ingredient'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* 🌟 PROTOTYPE BOTTOM SHEET: REFILL INVENTORY                    */}
+      {/* ============================================================== */}
+      {refillItem && (
+        <div
+          onClick={() => setRefillItem(null)}
+          className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-[#1C1A18] rounded-t-[20px] sm:rounded-2xl border border-[#3A352E] p-5 shadow-2xl space-y-4"
+          >
+            <div className="w-9 h-1 rounded-full bg-[#3A352E] mx-auto sm:hidden" />
+
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-semibold text-white">Refill: {refillItem.name}</h3>
+              <button
+                type="button"
+                onClick={() => setRefillItem(null)}
+                className="w-8 h-8 rounded-full bg-[#26231F] text-[#9A9184] hover:text-white flex items-center justify-center font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleRefillSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                  Quantity to add ({refillItem.unit}) *
+                </label>
+                <input
+                  type="number"
+                  required
+                  autoFocus
+                  min="1"
+                  placeholder={`e.g. 500 ${refillItem.unit}`}
+                  value={refillQty}
+                  onChange={(e) => setRefillQty(e.target.value)}
+                  className="w-full h-12 rounded-lg border border-[#3A352E] bg-[#26231F] px-3.5 text-lg font-bold text-white outline-none focus:border-[#E5B35C]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
+                  Total purchase cost (₹)
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 140 (deducts from today's profit)"
+                  value={refillCost}
+                  onChange={(e) => setRefillCost(e.target.value)}
+                  className="w-full h-12 rounded-lg border border-[#3A352E] bg-[#26231F] px-3.5 text-base text-white outline-none focus:border-[#E5B35C]"
+                />
+                <span className="text-[11px] text-[#9A9184] mt-1 block">
+                  Automatically logs to your Daily P&amp;L Ledger.
+                </span>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmittingRefill}
+                className="w-full h-[52px] rounded-xl bg-[#E5B35C] text-[#1A1206] font-semibold text-[17px] active:scale-[0.98] transition-transform disabled:opacity-50"
+              >
+                {isSubmittingRefill ? 'Updating stock…' : 'Confirm refill'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* 🌟 PROTOTYPE BOTTOM SHEET: RECIPE BUILDER                     */}
+      {/* ============================================================== */}
+      {recipeDish && (
+        <div
+          onClick={() => setRecipeDish(null)}
+          className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-[#1C1A18] rounded-t-[20px] sm:rounded-2xl border border-[#3A352E] p-5 shadow-2xl max-h-[85vh] overflow-y-auto no-scrollbar space-y-4"
+          >
+            <div className="w-9 h-1 rounded-full bg-[#3A352E] mx-auto sm:hidden" />
+
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-semibold text-white">Recipe: {recipeDish.name}</h3>
+                <p className="text-xs text-[#9A9184] mt-0.5">
+                  Pantry stock consumed per single plate
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecipeDish(null)}
+                className="w-8 h-8 rounded-full bg-[#26231F] text-[#9A9184] hover:text-white flex items-center justify-center font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2.5 max-h-60 overflow-y-auto no-scrollbar pr-1">
               {recipeIngredients.length === 0 ? (
-                <p className="text-xs text-gray-500 text-center py-4">No ingredients linked. This dish will not decrement raw inventory.</p>
+                <p className="text-xs text-[#9A9184] text-center py-4">
+                  No ingredients linked yet. This dish won&apos;t decrement pantry stock.
+                </p>
               ) : (
                 recipeIngredients.map((row, idx) => {
-                  const targetItem = rawItems.find(r => r.id === row.inventoryItemId);
+                  const targetItem = rawItems.find((r) => r.id === row.inventoryItemId);
+
                   return (
-                    <div key={idx} className="flex gap-2 items-center bg-[#0B0E14] p-2.5 rounded-lg border border-gray-800">
-                      <select 
+                    <div
+                      key={idx}
+                      className="flex gap-2 items-center bg-[#26231F] p-2 rounded-xl border border-[#3A352E]"
+                    >
+                      <select
                         value={row.inventoryItemId}
                         onChange={(e) => {
                           const updated = [...recipeIngredients];
                           updated[idx].inventoryItemId = e.target.value;
                           setRecipeIngredients(updated);
                         }}
-                        className="flex-1 bg-[#1A1D24] text-xs text-white p-2 rounded border border-gray-700 outline-none"
+                        className="flex-1 bg-[#1C1A18] text-xs text-white p-2.5 rounded-lg border border-[#3A352E] outline-none"
                       >
-                        <option value="">Select ingredient...</option>
-                        {rawItems.map(r => (
-                          <option key={r.id} value={r.id}>{r.name} ({r.unit})</option>
+                        <option value="">Select ingredient…</option>
+                        {rawItems.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name} ({r.unit})
+                          </option>
                         ))}
                       </select>
 
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
+                        min="1"
                         value={row.quantityUsed}
                         onChange={(e) => {
                           const updated = [...recipeIngredients];
@@ -815,13 +1154,19 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                           setRecipeIngredients(updated);
                         }}
                         placeholder="Qty"
-                        className="w-20 bg-[#1A1D24] text-xs text-white p-2 rounded border border-gray-700 outline-none"
+                        className="w-20 bg-[#1C1A18] text-xs text-white p-2.5 rounded-lg border border-[#3A352E] outline-none text-center font-bold"
                       />
-                      <span className="text-[10px] text-[#E5B35C] font-mono w-8">{targetItem?.unit || ''}</span>
 
-                      <button 
-                        onClick={() => setRecipeIngredients(recipeIngredients.filter((_, i) => i !== idx))}
-                        className="text-red-500 hover:text-red-400 px-2 font-bold"
+                      <span className="text-xs text-[#E5B35C] font-mono w-8 shrink-0 text-center">
+                        {targetItem?.unit || ''}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRecipeIngredients(recipeIngredients.filter((_, i) => i !== idx))
+                        }
+                        className="text-red-400 hover:text-red-300 px-2 font-bold text-sm"
                       >
                         ✕
                       </button>
@@ -831,155 +1176,30 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
               )}
             </div>
 
-            <button 
-              onClick={() => setRecipeIngredients([...recipeIngredients, { inventoryItemId: rawItems[0]?.id || '', quantityUsed: 1 }])}
-              className="text-xs text-[#E5B35C] hover:underline font-bold mb-6 block"
+            <button
+              type="button"
+              onClick={() =>
+                setRecipeIngredients([
+                  ...recipeIngredients,
+                  { inventoryItemId: rawItems[0]?.id || '', quantityUsed: 1 },
+                ])
+              }
+              className="text-xs text-[#E5B35C] hover:underline font-semibold block"
             >
-              + Add Ingredient
+              + Add ingredient
             </button>
 
-            <div className="flex gap-3">
-              <button 
-                onClick={handleSaveRecipe}
-                disabled={isSavingRecipe}
-                className="flex-1 py-2.5 bg-[#E5B35C] text-black font-bold text-xs rounded-xl hover:bg-[#d4a24b] transition-all disabled:opacity-50"
-              >
-                {isSavingRecipe ? 'Saving...' : 'Save Recipe'}
-              </button>
-              <button 
-                onClick={() => setRecipeItem(null)}
-                className="px-4 py-2.5 bg-gray-800 text-gray-400 text-xs rounded-xl hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleSaveRecipe}
+              disabled={isSavingRecipe}
+              className="w-full h-[52px] rounded-xl bg-[#E5B35C] text-[#1A1206] font-semibold text-[17px] active:scale-[0.98] transition-transform disabled:opacity-50"
+            >
+              {isSavingRecipe ? 'Saving recipe…' : 'Save recipe'}
+            </button>
           </div>
         </div>
       )}
-
-      {/* ============================================================== */}
-      {/* 🔗 MODAL: REFILL INVENTORY (Add stock to pantry)               */}
-      {/* ============================================================== */}
-{refillItem && (
-  <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-    <div className="bg-[#13161F] border border-gray-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-      <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-3">
-        <h3 className="text-lg font-bold text-white">Refill: {refillItem.name}</h3>
-        <button onClick={() => setRefillItem(null)} className="text-gray-400 hover:text-white">✕</button>
-      </div>
-
-      <form onSubmit={handleRefillSubmit} className="space-y-4">
-        <div>
-          <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-            Quantity to Add ({refillItem.unit})
-          </label>
-          <input 
-            type="number" 
-            value={refillQty} 
-            onChange={(e) => setRefillQty(e.target.value)} 
-            required 
-            placeholder={`e.g. 1000 ${refillItem.unit}`}
-            className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] outline-none font-bold"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-            Total Purchase Cost (₹)
-          </label>
-          <input 
-            type="number" 
-            value={refillCost} 
-            onChange={(e) => setRefillCost(e.target.value)} 
-            placeholder="e.g. 50 (deducts from today's profit)"
-            className="w-full bg-[#0B0E14] border border-gray-700 text-white rounded-lg p-2.5 text-sm focus:border-[#E5B35C] outline-none"
-          />
-          <span className="text-[10px] text-gray-500 mt-1 block">Automatically logs to your Daily P&L Ledger.</span>
-        </div>
-
-        <div className="flex gap-2 pt-2">
-          <button 
-            type="submit" 
-            disabled={isSubmittingRefill}
-            className="flex-1 bg-[#E5B35C] text-black font-bold py-2 rounded-lg text-xs hover:bg-[#d4a24b] disabled:opacity-50"
-          >
-            {isSubmittingRefill ? 'Updating...' : 'Confirm Refill'}
-          </button>
-          <button 
-            type="button" 
-            onClick={() => setRefillItem(null)} 
-            className="px-4 py-2 bg-gray-800 text-gray-400 text-xs rounded-lg hover:bg-gray-700"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
-
-      {/* --- EDIT MODAL (Unchanged) --- */}
-      {editingItem && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-[#1C120C] border border-[#2F2117] text-gray-200 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative animate-scale-up">
-            <div className="p-5 border-b border-[#2F2117] flex justify-between items-center bg-[#150D09]">
-              <h3 className="text-xl font-serif text-white font-bold">Edit: {editingItem.name}</h3>
-              <button onClick={() => setEditingItem(null)} className="text-gray-400 hover:text-white text-xl font-bold w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/5">×</button>
-            </div>
-
-            <form onSubmit={handleUpdateItem} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto no-scrollbar">
-              <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase mb-1.5">Name</label>
-                <input type="text" value={editingItem.name} onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })} required className="w-full bg-[#130B07] border border-[#3E291C] rounded-xl p-3 text-white outline-none focus:border-[#E5B35C] text-sm" />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase mb-1.5">Description</label>
-                <input type="text" value={editingItem.description || ''} onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })} placeholder="Rich buttery bhaji with soft pavs" className="w-full bg-[#130B07] border border-[#3E291C] rounded-xl p-3 text-white outline-none focus:border-[#E5B35C] text-sm" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1.5">Selling price (₹)</label>
-                  <input type="number" value={editingItem.price} onChange={(e) => setEditingItem({ ...editingItem, price: Number(e.target.value) })} required className="w-full bg-[#130B07] border border-[#3E291C] rounded-xl p-3 text-white outline-none focus:border-[#E5B35C] text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1.5">Cost price (₹)</label>
-                  <input type="number" value={editingItem.costPrice || ''} onChange={(e) => setEditingItem({ ...editingItem, costPrice: Number(e.target.value) })} placeholder="e.g. 28" className="w-full bg-[#130B07] border border-[#3E291C] rounded-xl p-3 text-white outline-none focus:border-[#E5B35C] text-sm" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase mb-1.5">Category</label>
-                <select value={editingItem.category} onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })} className="w-full bg-[#130B07] border border-[#3E291C] rounded-xl p-3 text-white outline-none focus:border-[#E5B35C] text-sm">
-                  <option value="Food">Food</option>
-                  <option value="Snacks">Snacks</option>
-                  <option value="Drinks">Drinks</option>
-                  <option value="Dessert">Dessert</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-[#2F2117]">
-                <span className="text-sm font-medium text-gray-300">Active / visible</span>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={editingItem.available} onChange={(e) => setEditingItem({ ...editingItem, available: e.target.checked })} className="sr-only peer" />
-                  <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                </label>
-              </div>
-
-              <div className="flex justify-between gap-4 pt-4">
-                <button type="submit" disabled={isSaving || isUploadingImage} className="flex-1 bg-red-700 text-white font-bold py-3 rounded-xl hover:bg-red-600 transition-colors text-sm shadow-md disabled:opacity-50">
-                  {isUploadingImage ? 'Uploading Image...' : isSaving ? 'Saving...' : 'Save'}
-                </button>
-                <button type="button" onClick={() => deleteItem(editingItem.id)} className="px-5 border border-red-900/40 text-red-400 rounded-xl text-sm font-medium hover:bg-red-950/20 transition-colors">
-                  Delete
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

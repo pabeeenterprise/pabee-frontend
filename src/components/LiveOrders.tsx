@@ -24,7 +24,7 @@ interface Order {
 
 interface LiveOrdersProps {
   vendorId: string;
-  mode?: string; // Kept optional for backward compatibility
+  mode?: string;
   soundEnabled?: boolean;
 }
 
@@ -52,47 +52,65 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
     }
   };
 
-  const fetchQueue = async () => {
+  // 1. Fetch only pending/preparing kitchen tickets every 5 seconds
+  const fetchActiveQueue = async () => {
     try {
       const token = await getToken();
       const headers = { Authorization: `Bearer ${token}` };
 
-      const [liveRes, histRes] = await Promise.all([
-        fetch(`${API_URL}/api/vendors/${vendorId}/kitchen-queue`, { headers }),
-        fetch(`${API_URL}/api/vendors/${vendorId}/sales`, { headers }),
-      ]);
-
-      if (liveRes.ok) {
-        const liveData = await liveRes.json();
+      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/kitchen-queue`, { headers });
+      if (res.ok) {
+        const liveData = await res.json();
         const incomingOrders: Order[] = liveData.orders || [];
 
-        // Ring chime when new orders arrive
         if (prevOrderCountRef.current > 0 && incomingOrders.length > prevOrderCountRef.current) {
           playRing();
         }
         prevOrderCountRef.current = incomingOrders.length;
         setOrders(incomingOrders);
       }
-
-      if (histRes.ok) {
-        const histData = await histRes.json();
-        setHistoryOrders(histData.orders || []);
-      }
     } catch (err) {
-      console.error('Queue sync failed', err);
+      console.error('Active queue poll failed', err);
     } finally {
       setLoading(false);
     }
   };
 
+  // 2. Fetch completed orders strictly on demand
+  const fetchHistory = async () => {
+    try {
+      const token = await getToken();
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/sales`, {
+        headers,
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const histData = await res.json();
+        setHistoryOrders(histData.orders || []);
+      }
+    } catch (err) {
+      console.error('History fetch failed', err);
+    }
+  };
+
+  // Run the 5s interval exclusively on active kitchen tickets
   useEffect(() => {
-    fetchQueue();
-    const interval = setInterval(fetchQueue, 5000);
+    fetchActiveQueue();
+    const interval = setInterval(fetchActiveQueue, 5000);
     return () => clearInterval(interval);
   }, [vendorId]);
 
+  // Load history strictly when the cook taps the "Completed History" tab
+  useEffect(() => {
+    if (queueTab === 'history') {
+      fetchHistory();
+    }
+  }, [queueTab]);
+
   // "To Make Now" Aggregation Across All Unfinished Orders
-  const toMakeAggregation = useMemo(() => {
+  const toMakeAggregation = useMemo((): [string, number][] => {
     const active = orders.filter(
       (o) => o.kitchenStatus === 'pending' || o.kitchenStatus === 'preparing'
     );
@@ -105,7 +123,7 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [orders]);
 
-  const getAgeMinutes = (createdAt: string) => {
+  const getAgeMinutes = (createdAt: string): number => {
     return Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000));
   };
 
@@ -123,10 +141,15 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
       });
 
       if (res.ok) {
-        if (status === 'preparing') toast.success('Cooking started 🔥');
-        else if (status === 'completed') toast.success('Order marked ready ✅');
-        else if (status === 'cancelled') toast.error('Order cancelled & stock restored');
-        fetchQueue();
+        if (status === 'preparing') {
+          toast.success('Cooking started 🔥');
+        } else if (status === 'completed') {
+          toast.success('Order marked ready ✅');
+          fetchHistory();
+        } else if (status === 'cancelled') {
+          toast.error('Order cancelled & stock restored');
+        }
+        fetchActiveQueue();
       }
     } catch {
       toast.error('Failed to update status');

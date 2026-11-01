@@ -1,22 +1,58 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '@clerk/clerk-react'; 
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useAuth } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
 
-interface OrderItem { id: string; name: string; qty: number; price: number; }
-interface Order { id: string; createdAt: string; paymentMode: string; kitchenStatus: string; total: number; token: number; tableId?: string; customerName: string; customerPhone?: string; items: OrderItem[]; }
-interface MenuItem { id: string; name: string; price: number; category: string; }
+interface OrderItem {
+  id?: string;
+  name: string;
+  qty: number;
+  price: number;
+}
 
-export default function LiveOrders({ vendorId }: { vendorId: string }) {
+interface Order {
+  id: string;
+  createdAt: string;
+  paymentMode: string;
+  kitchenStatus: string;
+  total: number;
+  token: number;
+  tableId?: string;
+  customerName: string;
+  customerPhone?: string;
+  items: OrderItem[];
+}
+
+interface MenuItem {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  veg?: boolean;
+}
+
+interface LiveOrdersProps {
+  vendorId: string;
+  mode?: 'queue' | 'pos';
+  soundEnabled?: boolean;
+}
+
+export default function LiveOrders({ vendorId, mode = 'queue', soundEnabled = true }: LiveOrdersProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
-  const [expandedSegment, setExpandedSegment] = useState<'NEW' | 'PREP' | 'HISTORY' | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Queue View State
+  const [queueTab, setQueueTab] = useState<'active' | 'history'>('active');
+
+  // POS State
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [posCart, setPosCart] = useState<OrderItem[]>([]);
-  const [reference, setReference] = useState('');
-  const [phone, setPhone] = useState('');
+  const [customerIdentifier, setCustomerIdentifier] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [isParcel, setIsParcel] = useState(false);
+  const [cashGiven, setCashGiven] = useState<number | null>(null);
   const [activePromo, setActivePromo] = useState<any | null>(null);
   const [applyDiscount, setApplyDiscount] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,33 +60,76 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
   const { getToken } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
 
+  // 🔔 Audio Alarm Trigger for Incoming Orders
+  const prevOrderCountRef = useRef<number>(0);
+
+  const playRing = () => {
+    if (!soundEnabled) return;
+    try {
+      const audio = new Audio('/bell.wav');
+      audio.play().catch((e) => console.warn('Audio autoplay blocked', e));
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate([200, 100, 200]);
+      }
+    } catch (err) {
+      console.error('Audio ring error', err);
+    }
+  };
+
   const fetchData = async () => {
     try {
-      const token = await getToken(); 
-      const headers = { 'Authorization': `Bearer ${token}` };
-      
-      const liveRes = await fetch(`${API_URL}/api/vendors/${vendorId}/kitchen-queue`, { headers });
-      const histRes = await fetch(`${API_URL}/api/vendors/${vendorId}/sales`, { headers });
-      if (liveRes.ok) setOrders((await liveRes.json()).orders);
-      if (histRes.ok) setHistoryOrders((await histRes.json()).orders);
+      const token = await getToken();
+      const headers = { Authorization: `Bearer ${token}` };
 
+      const [liveRes, histRes] = await Promise.all([
+        fetch(`${API_URL}/api/vendors/${vendorId}/kitchen-queue`, { headers }),
+        fetch(`${API_URL}/api/vendors/${vendorId}/sales`, { headers }),
+      ]);
+
+      if (liveRes.ok) {
+        const liveData = await liveRes.json();
+        const incomingOrders: Order[] = liveData.orders || [];
+
+        // Ring audio if new pending order arrived
+        if (
+          prevOrderCountRef.current > 0 &&
+          incomingOrders.length > prevOrderCountRef.current
+        ) {
+          playRing();
+        }
+        prevOrderCountRef.current = incomingOrders.length;
+        setOrders(incomingOrders);
+      }
+
+      if (histRes.ok) {
+        const histData = await histRes.json();
+        setHistoryOrders(histData.orders || []);
+      }
+
+      // Fetch Menu & Promos for POS on initial load
       if (menuItems.length === 0) {
-        const menuRes = await fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`, { headers });
-        const promoRes = await fetch(`${API_URL}/api/vendors/${vendorId}/promos?activeOnly=true`, { headers });        if (menuRes.ok) setMenuItems((await menuRes.json()).items || []);
+        const [menuRes, promoRes] = await Promise.all([
+          fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`, { headers }),
+          fetch(`${API_URL}/api/vendors/${vendorId}/promos?activeOnly=true`, { headers }),
+        ]);
+
+        if (menuRes.ok) {
+          const menuData = await menuRes.json();
+          setMenuItems(menuData.items || []);
+        }
+
         if (promoRes.ok) {
           const promoData = await promoRes.json();
-          const now = new Date();
-          // 🚨 Ensure we only pick a promo that is active AND not expired
-          const validPromo = promoData.promos?.find((p: any) => {
+          const valid = promoData.promos?.find((p: any) => {
             if (!p.isActive) return false;
-            if (p.expiresAt && new Date(p.expiresAt) < now) return false;
+            if (p.expiresAt && new Date(p.expiresAt) < new Date()) return false;
             return true;
           });
-          setActivePromo(validPromo || null);
+          setActivePromo(valid || null);
         }
       }
     } catch (err) {
-      console.error("Data sync failed", err);
+      console.error('Data sync failed', err);
     } finally {
       setLoading(false);
     }
@@ -58,301 +137,567 @@ export default function LiveOrders({ vendorId }: { vendorId: string }) {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000);
+    const interval = setInterval(fetchData, 6000);
     return () => clearInterval(interval);
   }, [vendorId]);
 
-  const filteredMenu = menuItems.filter(item => item.name.toLowerCase().startsWith(searchTerm.toLowerCase()));
+  // 🧮 1. "To Make Now" Kitchen Aggregation Strip
+  const toMakeAggregation = useMemo(() => {
+    const active = orders.filter(
+      (o) => o.kitchenStatus === 'pending' || o.kitchenStatus === 'preparing'
+    );
+    const counts: Record<string, number> = {};
+    active.forEach((order) => {
+      order.items?.forEach((item) => {
+        counts[item.name] = (counts[item.name] || 0) + item.qty;
+      });
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [orders]);
+
+  // ⏱️ 2. Age & Urgency Calculation
+  const getAge = (createdAt: string) => {
+    const elapsedMinutes = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000));
+    return elapsedMinutes;
+  };
+
+  // ⚡ POS Calculations
+  const categories = useMemo(() => {
+    const cats = [...new Set(menuItems.map((m) => m.category).filter(Boolean))];
+    return ['All', ...cats];
+  }, [menuItems]);
+
+  const filteredMenuItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      if (selectedCategory !== 'All' && item.category !== selectedCategory) return false;
+      if (searchTerm.trim()) {
+        return item.name.toLowerCase().includes(searchTerm.toLowerCase());
+      }
+      return true;
+    });
+  }, [menuItems, selectedCategory, searchTerm]);
 
   const addToPos = (item: MenuItem) => {
-    setPosCart(prev => {
-      const existing = prev.find(i => i.id === item.id);
-      if (existing) return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { ...item, qty: 1 }];
+    setPosCart((prev) => {
+      const existing = prev.find((i) => i.name === item.name);
+      if (existing) {
+        return prev.map((i) => (i.name === item.name ? { ...i, qty: i.qty + 1 } : i));
+      }
+      return [...prev, { name: item.name, qty: 1, price: item.price }];
     });
   };
 
-  const removeFromPos = (itemId: string) => {
-    setPosCart(prev => {
-      const existing = prev.find(i => i.id === itemId);
-      if (!existing) return prev;
-      if (existing.qty === 1) return prev.filter(i => i.id !== itemId);
-      return prev.map(i => i.id === itemId ? { ...i, qty: i.qty - 1 } : i);
-    });
-  };
-
-  const rawTotal = posCart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  let finalTotal = rawTotal;
-  if (applyDiscount && activePromo && rawTotal >= activePromo.minOrderValue) {
-    const discountAmt = activePromo.type === 'FLAT' ? activePromo.value : (rawTotal * activePromo.value) / 100;
-    finalTotal = Math.max(0, rawTotal - discountAmt);
-  }
-
-  const handleClearPos = () => { setPosCart([]); setReference(''); setPhone(''); setApplyDiscount(false); };
-
-  const handleToggleDiscount = () => {
-    // If turning the discount OFF, allow it immediately
-    if (applyDiscount) {
-      setApplyDiscount(false);
-      return;
-    }
-
-    // If turning the discount ON, validate freshness
-    if (!activePromo) return;
-
-    if (activePromo.expiresAt && new Date(activePromo.expiresAt) < new Date()) {
-      toast.error(`Promo ${activePromo.code} has expired.`);
-      setActivePromo(null);
-      setApplyDiscount(false);
-      return;
-    }
-
-    if (!activePromo.isActive) {
-      toast.error(`Promo ${activePromo.code} is no longer active.`);
-      setActivePromo(null);
-      setApplyDiscount(false);
-      return;
-    }
-
-    if (rawTotal < activePromo.minOrderValue) {
-      toast.error(`Minimum order value of ₹${activePromo.minOrderValue} required.`);
-      return;
-    }
-
-    setApplyDiscount(true);
-  };
-
-  const submitManualOrder = async (paymentMode: 'CASH' | 'UPI') => {
-    if (posCart.length === 0) return toast.error("Cart is empty!");
-    setIsSubmitting(true);
-    try {
-      const res = await fetch(`${API_URL}/api/orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vendorId, tableId: "Counter", customerName: reference.trim() || "Counter Order",
-          customerPhone: phone.trim().length === 10 ? phone.trim() : "0000000000",
-          paymentMode, total: finalTotal, items: posCart.map(c => ({ name: c.name, qty: c.qty, price: c.price }))
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        toast.success(`Token #${data.tokenNumber} Created!`);
-        handleClearPos();
-        fetchData();
-      }
-    } catch (err) { toast.error("Checkout failed"); } 
-    finally { setIsSubmitting(false); }
-  };
-
-  const updateStatus = async (orderId: string, status: string, isVerify = false) => {
-    try {
-      const token = await getToken(); 
-      const res = await fetch(`${API_URL}/api/orders/${orderId}/kitchen-status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ status })
-      });
-      if (res.ok) {
-        if (isVerify) toast.success("Payment verified!");
-        else if (status === 'completed') toast.success("Order Ready!");
-        else if (status === 'cancelled') toast.error("Order Cancelled.");
-        fetchData(); 
-      }
-    } catch (err) { toast.error("Update failed"); }
-  };
-
-  // 🎨 ULTRA-COMPRESSED CARD RENDERER
-  const renderCard = (order: Order, segment: 'NEW' | 'PREP' | 'HISTORY') => {
-    const time = new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return (
-      <div key={order.id} className="bg-[#13161F] border border-[#1F2330] rounded-xl p-2 flex flex-col justify-between shadow-md h-full relative overflow-hidden">
-        <div className="flex justify-between items-start mb-1 border-b border-gray-800/50 pb-1">
-          <div>
-            <span className="text-xl font-black text-white leading-none">#{order.token}</span>
-            <p className="text-[9px] text-gray-500 mt-0.5 font-bold uppercase truncate w-20">{order.customerName}</p>
-          </div>
-          <div className="text-right">
-            <span className="text-[#E5B35C] font-bold text-xs">₹{order.total}</span>
-            <p className="text-[8px] text-gray-500">{time}</p>
-          </div>
-        </div>
-        <div className="flex-1 overflow-hidden min-h-0 flex flex-col justify-center">
-          {order.items.slice(0, 2).map((item, idx) => (
-            <div key={idx} className="flex justify-between text-[10px] text-gray-300">
-              <span className="truncate pr-1">{item.name}</span>
-              <span className="font-bold text-gray-500">x{item.qty}</span>
-            </div>
-          ))}
-          {order.items.length > 2 && <span className="text-[9px] text-gray-600 italic">+{order.items.length - 2} more...</span>}
-        </div>
-        <div className="mt-1 pt-1 border-t border-gray-800/50 shrink-0">
-          {segment === 'NEW' && (
-            <button onClick={() => updateStatus(order.id, 'preparing', order.paymentMode === 'UPI')} className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg transition-colors">
-              Start Prep
-            </button>
-          )}
-          {segment === 'PREP' && (
-            <div className="flex gap-1">
-              <button onClick={() => updateStatus(order.id, 'cancelled')} className="w-1/3 py-1.5 bg-red-900/40 hover:bg-red-900 text-red-500 text-[10px] font-bold rounded-lg transition-colors">Cancel</button>
-              <button onClick={() => updateStatus(order.id, 'completed')} className="w-2/3 py-1.5 bg-[#E5B35C] hover:bg-yellow-400 text-black text-[10px] font-bold rounded-lg transition-colors">Mark Ready</button>
-            </div>
-          )}
-          {segment === 'HISTORY' && (
-            <div className="w-full py-1 bg-gray-800 text-gray-400 text-[9px] font-bold rounded text-center cursor-default">Completed</div>
-          )}
-        </div>
-      </div>
+  const updatePosQty = (name: string, delta: number) => {
+    setPosCart((prev) =>
+      prev
+        .map((i) => (i.name === name ? { ...i, qty: i.qty + delta } : i))
+        .filter((i) => i.qty > 0)
     );
   };
 
-  if (loading) return <div className="text-gray-400 p-8 font-bold tracking-widest uppercase">Loading Terminal...</div>;
+  const rawTotal = posCart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const packingFee = isParcel ? 10 : 0;
+  let discountAmount = 0;
+  if (applyDiscount && activePromo && rawTotal >= activePromo.minOrderValue) {
+    discountAmount =
+      activePromo.type === 'FLAT' ? activePromo.value : (rawTotal * activePromo.value) / 100;
+  }
+  const posFinalTotal = Math.max(0, rawTotal - discountAmount + packingFee);
 
-  const newOrders = orders.filter(o => o.kitchenStatus === 'pending');
-  const prepOrders = orders.filter(o => o.kitchenStatus === 'preparing');
+  const clearPos = () => {
+    setPosCart([]);
+    setCustomerIdentifier('');
+    setCustomerPhone('');
+    setIsParcel(false);
+    setCashGiven(null);
+    setApplyDiscount(false);
+  };
 
-  return (
-    <div className="h-[100dvh] w-full bg-[#0B0E14] flex gap-2 overflow-hidden p-2 box-border">
-      
-      {/* 🚀 LEFT COLUMN: THE 3-SEGMENT HORIZONTAL KDS */}
-      <div className="flex-1 flex flex-col gap-2 min-w-0 min-h-0">
-        
-        {/* ROW 1: NEW */}
-        <div className="flex-1 flex flex-col bg-[#0A0C10] rounded-xl border border-gray-800/40 p-2 min-h-0">
-          <h3 className="text-xs font-bold text-blue-500 mb-1 flex items-center shrink-0">NEW <span className="bg-blue-500/20 px-1.5 py-0.5 rounded text-[10px] ml-2">{newOrders.length}</span></h3>
-          <div className="flex-1 grid grid-cols-4 gap-2 min-h-0 w-full">
-            {newOrders.slice(0, 3).map(order => <div key={order.id} className="h-full">{renderCard(order, 'NEW')}</div>)}
-            {newOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-[10px]">No New Orders</div>}
-            {newOrders.length > 3 && (
-              <button onClick={() => setExpandedSegment('NEW')} className="h-full bg-blue-900/30 border border-blue-500/30 text-blue-400 font-black rounded-lg flex flex-col items-center justify-center active:scale-95">
-                <span className="text-2xl">+{newOrders.length - 3}</span><span className="text-[9px] mt-0.5 font-bold tracking-widest">MORE</span>
-              </button>
-            )}
-          </div>
-        </div>
+  // Order Submission for Walk-Up Counter
+  const submitPosOrder = async (paymentMode: 'CASH' | 'UPI') => {
+    if (posCart.length === 0) {
+      toast.error('Cart is empty');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/api/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          vendorId,
+          tableId: isParcel ? 'Parcel' : 'Counter',
+          customerName: customerIdentifier.trim() || 'Counter Walk-up',
+          customerPhone: customerPhone.trim().length === 10 ? customerPhone.trim() : '0000000000',
+          paymentMode,
+          total: posFinalTotal,
+          items: posCart.map((c) => ({ name: c.name, qty: c.qty, price: c.price })),
+        }),
+      });
 
-        {/* ROW 2: PREPARING */}
-        <div className="flex-1 flex flex-col bg-[#0A0C10] rounded-xl border border-gray-800/40 p-2 min-h-0">
-          <h3 className="text-xs font-bold text-[#E5B35C] mb-1 flex items-center shrink-0">PREPARING <span className="bg-[#E5B35C]/20 px-1.5 py-0.5 rounded text-[10px] ml-2">{prepOrders.length}</span></h3>
-          <div className="flex-1 grid grid-cols-4 gap-2 min-h-0 w-full">
-            {prepOrders.slice(0, 3).map(order => <div key={order.id} className="h-full">{renderCard(order, 'PREP')}</div>)}
-            {prepOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-[10px]">Grill is empty</div>}
-            {prepOrders.length > 3 && (
-              <button onClick={() => setExpandedSegment('PREP')} className="h-full bg-[#E5B35C]/10 border border-[#E5B35C]/30 text-[#E5B35C] font-black rounded-lg flex flex-col items-center justify-center active:scale-95">
-                <span className="text-2xl">+{prepOrders.length - 3}</span><span className="text-[9px] mt-0.5 font-bold tracking-widest">MORE</span>
-              </button>
-            )}
-          </div>
-        </div>
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to create counter order');
+        setIsSubmitting(false);
+        return;
+      }
 
-        {/* ROW 3: HISTORY */}
-        <div className="flex-1 flex flex-col bg-[#0A0C10] rounded-xl border border-gray-800/40 p-2 min-h-0">
-          <h3 className="text-xs font-bold text-gray-400 mb-1 flex items-center shrink-0">HISTORY <span className="bg-gray-800 px-1.5 py-0.5 rounded text-[10px] ml-2">{historyOrders.length}</span></h3>
-          <div className="flex-1 grid grid-cols-4 gap-2 min-h-0 w-full">
-            {historyOrders.slice(0, 3).map(order => <div key={order.id} className="h-full opacity-70">{renderCard(order, 'HISTORY')}</div>)}
-            {historyOrders.length === 0 && <div className="col-span-4 m-auto text-gray-600 font-bold uppercase text-[10px]">No history yet</div>}
-            {historyOrders.length > 3 && (
-              <button onClick={() => setExpandedSegment('HISTORY')} className="h-full bg-gray-800 border border-gray-700 text-gray-400 font-black rounded-lg flex flex-col items-center justify-center active:scale-95">
-                <span className="text-2xl">+{historyOrders.length - 3}</span><span className="text-[9px] mt-0.5 font-bold tracking-widest">MORE</span>
-              </button>
-            )}
-          </div>
-        </div>
+      toast.success(`Token #${data.tokenNumber} Created!`);
+      clearPos();
+      fetchData();
+    } catch {
+      toast.error('Network error creating counter order');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Kitchen Lifecycle Status Updates
+  const updateStatus = async (orderId: string, status: string) => {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/api/orders/${orderId}/kitchen-status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      if (res.ok) {
+        if (status === 'preparing') toast.success('Cooking started 🔥');
+        else if (status === 'completed') toast.success('Order marked ready ✅');
+        else if (status === 'cancelled') toast.error('Order cancelled');
+        fetchData();
+      }
+    } catch {
+      toast.error('Failed to update order status');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-8 text-center text-[#9A9184] font-semibold text-sm">
+        Loading kitchen terminal…
       </div>
+    );
+  }
 
-      {/* 🚀 RIGHT COLUMN: THE NEW QUICK POS */}
-      <div className="w-72 shrink-0 bg-[#0A0C10] border border-gray-800/40 rounded-xl p-3 flex flex-col min-h-0 relative">
-        <h2 className="text-white font-black text-sm mb-2 flex items-center gap-1.5 shrink-0">
-          <span>⚡</span> Walk-Up
-        </h2>
+  // ==========================================
+  // MODE 1: LIVE ORDERS QUEUE (KDS)
+  // ==========================================
+  if (mode === 'queue') {
+    return (
+      <div className="flex flex-col h-full bg-[#121110] text-[#F5F0E8] overflow-hidden">
+        
+        {/* Prototype Aggregate "To Make Now" Strip */}
+        <div className="bg-[#1C1A18] border-b border-[#3A352E] px-4 py-2.5 flex items-center gap-4 overflow-x-auto no-scrollbar shrink-0">
+          <span className="text-xs font-bold uppercase tracking-wider text-[#9A9184] shrink-0">
+            To make now
+          </span>
+          {toMakeAggregation.length === 0 ? (
+            <span className="text-xs text-[#5C554B]">All caught up</span>
+          ) : (
+            toMakeAggregation.map(([dishName, totalQty]) => (
+              <span
+                key={dishName}
+                className="shrink-0 px-2.5 py-1 rounded-md bg-[#26231F] border border-[#3A352E] text-xs font-semibold flex items-center gap-1.5"
+              >
+                <b className="text-[#E5B35C] font-extrabold text-sm">{totalQty}×</b>
+                <span>{dishName}</span>
+              </span>
+            ))
+          )}
+        </div>
 
-        {/* FLOATING AUTOCOMPLETE SEARCH */}
-        <div className="relative mb-2 z-50 shrink-0">
-          <input 
-            type="text" 
-            placeholder="Search dish (e.g. 'T')..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[#1A1D24] text-xs text-white p-2 rounded-lg border border-gray-800 outline-none focus:border-[#E5B35C] shadow-inner"
-          />
-          {searchTerm && (
-            <div className="absolute top-full left-0 w-full mt-1 bg-[#13161F] border border-gray-700 rounded-lg shadow-2xl max-h-48 overflow-y-auto no-scrollbar">
-              {filteredMenu.length === 0 ? (
-                <div className="p-2 text-[10px] text-gray-500 font-bold uppercase tracking-widest">No match</div>
+        {/* View Segment Tabs */}
+        <div className="flex gap-2 px-4 py-2 border-b border-[#3A352E] bg-[#121110] shrink-0">
+          <button
+            onClick={() => setQueueTab('active')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              queueTab === 'active'
+                ? 'bg-[#E5B35C] text-[#1A1206]'
+                : 'bg-[#1C1A18] text-[#9A9184] hover:text-[#F5F0E8]'
+            }`}
+          >
+            Active Orders ({orders.length})
+          </button>
+          <button
+            onClick={() => setQueueTab('history')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              queueTab === 'history'
+                ? 'bg-[#E5B35C] text-[#1A1206]'
+                : 'bg-[#1C1A18] text-[#9A9184] hover:text-[#F5F0E8]'
+            }`}
+          >
+            Completed History ({historyOrders.length})
+          </button>
+        </div>
+
+        {/* Orders Card Grid */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {queueTab === 'active' ? (
+            orders.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-8 text-[#9A9184]">
+                <span className="text-4xl mb-2">🍽️</span>
+                <p className="font-semibold text-base">All orders completed</p>
+                <p className="text-xs text-[#5C554B]">Incoming orders will ring automatically</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+                {orders.map((order) => {
+                  const ageMins = getAge(order.createdAt);
+                  const isLate = ageMins >= 10;
+                  const isSoon = ageMins >= 5 && ageMins < 10;
+
+                  return (
+                    <article
+                      key={order.id}
+                      className={`rounded-xl border p-3 flex flex-col justify-between shadow-sm relative overflow-hidden transition-colors ${
+                        isLate
+                          ? 'bg-[#33171A] border-red-500/40'
+                          : isSoon
+                          ? 'bg-[#2E2410] border-amber-500/40'
+                          : 'bg-[#1C1A18] border-[#3A352E]'
+                      }`}
+                    >
+                      {/* Urgency Color Accent Strip */}
+                      <div
+                        className={`absolute left-0 top-0 bottom-0 w-1 ${
+                          isLate ? 'bg-red-500' : isSoon ? 'bg-amber-500' : 'bg-transparent'
+                        }`}
+                      />
+
+                      <div className="pl-1">
+                        {/* Ticket Header */}
+                        <div className="flex items-center justify-between pb-2 border-b border-[#3A352E]/60">
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl font-black text-[#E5B35C] tabular-nums">
+                              #{order.token}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#26231F] text-[#C7BFB2]">
+                              {order.tableId || 'Counter'}
+                            </span>
+                          </div>
+
+                          <div className="text-right">
+                            <span
+                              className={`text-xs font-bold tabular-nums ${
+                                isLate ? 'text-red-400' : isSoon ? 'text-amber-400' : 'text-[#9A9184]'
+                              }`}
+                            >
+                              {ageMins === 0 ? 'Just now' : `${ageMins}m ago`}
+                            </span>
+                            <div className="text-[11px] font-semibold text-[#5CC97B]">
+                              ₹{order.total} · {order.paymentMode}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Customer & Cook Note */}
+                        <div className="py-1.5 text-xs text-[#C7BFB2] font-semibold truncate">
+                          {order.customerName}
+                        </div>
+
+                        {/* Order Items List */}
+                        <div className="space-y-1 my-2">
+                          {order.items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between items-start text-sm">
+                              <span className="font-semibold text-white">
+                                <b className="text-[#E5B35C] mr-1.5">{item.qty}×</b>
+                                {item.name}
+                              </span>
+                              <span className="text-xs text-[#9A9184] tabular-nums">
+                                ₹{item.price * item.qty}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 1-Tap Lifecycle Progression Buttons */}
+                      <div className="pt-2.5 border-t border-[#3A352E]/60 flex gap-2">
+                        {order.kitchenStatus === 'pending' && (
+                          <button
+                            onClick={() => updateStatus(order.id, 'preparing')}
+                            className="w-full h-10 rounded-lg bg-[#E5B35C] text-[#1A1206] font-bold text-xs active:scale-[0.98] transition-transform"
+                          >
+                            Start Cooking 🔥
+                          </button>
+                        )}
+
+                        {order.kitchenStatus === 'preparing' && (
+                          <>
+                            <button
+                              onClick={() => updateStatus(order.id, 'cancelled')}
+                              className="w-1/3 h-10 rounded-lg bg-red-900/30 text-red-400 border border-red-500/30 font-bold text-xs hover:bg-red-900/50"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => updateStatus(order.id, 'completed')}
+                              className="w-2/3 h-10 rounded-lg bg-[#5CC97B] text-[#15291B] font-extrabold text-xs active:scale-[0.98] transition-transform"
+                            >
+                              Mark Ready ✅
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )
+          ) : (
+            /* History Sub-View */
+            <div className="space-y-2 max-w-4xl mx-auto">
+              {historyOrders.length === 0 ? (
+                <div className="p-8 text-center text-[#9A9184] text-sm">No completed orders yet today.</div>
               ) : (
-                filteredMenu.map(item => (
-                  <button key={item.id} onClick={() => { addToPos(item); setSearchTerm(''); }} className="w-full text-left p-2 border-b border-gray-800/50 hover:bg-gray-800 flex justify-between items-center transition-colors">
-                    <span className="text-xs font-bold text-gray-200 truncate pr-2">{item.name}</span>
-                    <span className="text-[10px] text-[#E5B35C] font-mono shrink-0">₹{item.price}</span>
-                  </button>
+                historyOrders.map((hist) => (
+                  <div
+                    key={hist.id}
+                    className="p-3 rounded-xl bg-[#1C1A18] border border-[#3A352E] flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-[#E5B35C]">#{hist.token}</span>
+                        <span className="text-sm font-semibold">{hist.customerName}</span>
+                        <span className="text-xs text-[#9A9184]">({hist.tableId || 'Counter'})</span>
+                      </div>
+                      <div className="text-xs text-[#9A9184] mt-0.5">
+                        {hist.items?.map((i) => `${i.qty}× ${i.name}`).join(', ')}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-sm text-[#5CC97B]">₹{hist.total}</div>
+                      <div className="text-[10px] text-[#9A9184]">{hist.paymentMode}</div>
+                    </div>
+                  </div>
                 ))
               )}
             </div>
           )}
         </div>
+      </div>
+    );
+  }
 
-        <input type="text" placeholder="Identifier (e.g. Red Shirt)" value={reference} onChange={(e) => setReference(e.target.value)} className="w-full shrink-0 bg-[#1A1D24] text-[11px] text-white p-2 rounded-lg border border-gray-800 mb-1.5 outline-none focus:border-[#E5B35C]" />
-        <input type="tel" placeholder="Phone Number" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} maxLength={10} className="w-full shrink-0 bg-[#1A1D24] text-[11px] text-white p-2 rounded-lg border border-gray-800 mb-2 outline-none focus:border-[#E5B35C]" />
+  // ==========================================
+  // MODE 2: RAPID COUNTER TOUCH POS
+  // ==========================================
+  return (
+    <div className="flex flex-col lg:flex-row h-full bg-[#121110] text-[#F5F0E8] overflow-hidden">
+      
+      {/* LEFT: Menu Selection Pad */}
+      <div className="flex-1 flex flex-col p-4 overflow-hidden border-b lg:border-b-0 lg:border-r border-[#3A352E]">
+        
+        {/* Search & Category Header */}
+        <div className="space-y-2.5 pb-3 shrink-0">
+          <input
+            type="search"
+            placeholder="Type 2 letters (e.g. 'Va' for Vada Pav)…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full h-11 rounded-xl bg-[#1C1A18] border border-[#3A352E] px-3.5 text-sm text-[#F5F0E8] outline-none focus:border-[#E5B35C]"
+          />
 
-        {/* CART LIST */}
-        <div className="flex-1 overflow-y-auto min-h-0 space-y-1.5 no-scrollbar pr-1 mb-2">
-          {posCart.length === 0 ? (
-            <p className="text-gray-700 text-[10px] text-center mt-4 uppercase tracking-widest font-black">Cart is empty</p>
-          ) : (
-            posCart.map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center text-[11px] text-gray-300 bg-[#1A1D24] p-1.5 rounded-lg border border-gray-800/50">
-                <div className="flex items-center gap-1.5">
-                  <button onClick={() => removeFromPos(item.id)} className="w-5 h-5 bg-red-900/30 text-red-500 rounded font-black active:scale-90 border border-red-900/50 hover:bg-red-900/50 leading-none">−</button>
-                  <span className="font-bold text-[#E5B35C] w-3 text-center">{item.qty}x</span>
-                  <span className="font-medium line-clamp-1 w-20">{item.name}</span>
-                </div>
-                <span className="font-bold">₹{item.price * item.qty}</span>
-              </div>
-            ))
-          )}
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-colors ${
+                  selectedCategory === cat
+                    ? 'bg-[#E5B35C] text-[#1A1206]'
+                    : 'bg-[#1C1A18] border border-[#3A352E] text-[#C7BFB2]'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* CHECKOUT BLOCK */}
-        <div className="shrink-0 pt-2 border-t border-gray-800/50">
-        {activePromo && rawTotal >= activePromo.minOrderValue && (
-  <div onClick={handleToggleDiscount} className="flex justify-between items-center bg-[#1A1D24] p-1.5 rounded-lg border border-gray-800 mb-2 cursor-pointer">
-              <span className="text-[9px] font-bold text-[#E5B35C] uppercase">Apply {activePromo.code}</span>
-              <div className={`w-6 h-3 rounded-full flex items-center p-0.5 transition-colors ${applyDiscount ? 'bg-green-500' : 'bg-gray-700'}`}>
-                <div className={`w-2 h-2 bg-white rounded-full transform transition-transform ${applyDiscount ? 'translate-x-3' : ''}`}></div>
-              </div>
-            </div>
-          )}
+        {/* 1-Tap Item Tile Grid */}
+        <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 pr-1">
+          {filteredMenuItems.map((item) => {
+            const inCartItem = posCart.find((c) => c.name === item.name);
+            const qty = inCartItem?.qty || 0;
 
-          <div className="mb-2 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Total</span>
-              {posCart.length > 0 && <button onClick={handleClearPos} className="bg-red-900/20 text-red-500 text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border border-red-900/50 active:scale-95">Clear</button>}
-            </div>
-            <div className="text-right">
-              {applyDiscount && activePromo && rawTotal >= activePromo.minOrderValue && <span className="text-gray-600 text-[10px] line-through mr-1.5">₹{rawTotal}</span>}
-              <span className="text-[#E5B35C] text-lg font-black leading-none">₹{finalTotal}</span>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button disabled={isSubmitting || posCart.length === 0} onClick={() => submitManualOrder('CASH')} className="flex-1 bg-gray-800 text-white font-bold py-2 rounded-lg text-[11px] hover:bg-gray-700 disabled:opacity-50 active:scale-95">💵 CASH</button>
-            <button disabled={isSubmitting || posCart.length === 0} onClick={() => submitManualOrder('UPI')} className="flex-1 bg-blue-600 text-white font-bold py-2 rounded-lg text-[11px] hover:bg-blue-700 disabled:opacity-50 active:scale-95">⚡ UPI</button>
-          </div>
+            return (
+              <button
+                key={item.id}
+                onClick={() => addToPos(item)}
+                className="h-24 p-2.5 rounded-xl bg-[#1C1A18] border border-[#3A352E] flex flex-col justify-between text-left hover:border-[#E5B35C] active:scale-[0.98] transition-transform relative overflow-hidden"
+              >
+                <div className="text-xs font-bold leading-tight line-clamp-2">{item.name}</div>
+                <div className="flex justify-between items-center w-full">
+                  <span className="text-sm font-extrabold text-[#E5B35C] tabular-nums">
+                    ₹{item.price}
+                  </span>
+                  {qty > 0 && (
+                    <span className="w-5 h-5 rounded-full bg-[#E5B35C] text-[#1A1206] font-black text-xs grid place-items-center">
+                      {qty}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* 🚀 MODAL */}
-      {expandedSegment && (
-        <div className="fixed inset-0 bg-[#0B0E14] z-50 flex flex-col p-4 animate-in fade-in zoom-in-95 duration-200">
-          <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-800">
-            <h2 className="text-2xl font-black text-white">{expandedSegment} ORDERS</h2>
-            <button onClick={() => setExpandedSegment(null)} className="w-10 h-10 bg-red-500 hover:bg-red-600 text-white rounded-full font-black text-lg flex items-center justify-center shadow-lg active:scale-90">✕</button>
+      {/* RIGHT: Active Bill & Checkout Register */}
+      <div className="w-full lg:w-96 bg-[#1C1A18] p-4 flex flex-col justify-between shrink-0 h-auto lg:h-full overflow-y-auto border-t lg:border-t-0 border-[#3A352E]">
+        <div>
+          <div className="flex justify-between items-center pb-2.5 border-b border-[#3A352E]">
+            <h2 className="font-bold text-base">Counter Bill</h2>
+            {posCart.length > 0 && (
+              <button onClick={clearPos} className="text-xs text-red-400 underline">
+                Clear All
+              </button>
+            )}
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 overflow-y-auto pb-10">
-            {(expandedSegment === 'NEW' ? newOrders : expandedSegment === 'PREP' ? prepOrders : historyOrders).map(order => renderCard(order, expandedSegment))}
+
+          {/* Customer Identifier & Phone */}
+          <div className="grid grid-cols-2 gap-2 my-2.5">
+            <input
+              type="text"
+              placeholder="Identifier (e.g. Red Shirt)"
+              value={customerIdentifier}
+              onChange={(e) => setCustomerIdentifier(e.target.value)}
+              className="h-9 px-2.5 rounded-lg bg-[#26231F] border border-[#3A352E] text-xs outline-none focus:border-[#E5B35C]"
+            />
+            <input
+              type="tel"
+              placeholder="Phone (optional)"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
+              maxLength={10}
+              className="h-9 px-2.5 rounded-lg bg-[#26231F] border border-[#3A352E] text-xs outline-none focus:border-[#E5B35C]"
+            />
+          </div>
+
+          {/* Parcel Toggle */}
+          <button
+            type="button"
+            onClick={() => setIsParcel(!isParcel)}
+            className="flex items-center gap-2 mb-3 text-xs font-semibold text-[#C7BFB2]"
+          >
+            <span
+              className={`w-4 h-4 rounded border flex items-center justify-center font-bold text-[10px] ${
+                isParcel ? 'bg-[#E5B35C] text-[#1A1206] border-[#E5B35C]' : 'border-[#7A7266]'
+              }`}
+            >
+              {isParcel ? '✓' : ''}
+            </span>
+            <span>📦 Parcel (+₹10 packing)</span>
+          </button>
+
+          {/* Cart Item Lines */}
+          <div className="space-y-2 max-h-48 lg:max-h-64 overflow-y-auto pr-1 divide-y divide-[#3A352E]/40">
+            {posCart.length === 0 ? (
+              <div className="py-8 text-center text-xs text-[#7A7266]">Tap dishes to add to bill</div>
+            ) : (
+              posCart.map((item) => (
+                <div key={item.name} className="pt-2 flex justify-between items-center text-xs">
+                  <div className="truncate pr-2">
+                    <span className="font-semibold block truncate">{item.name}</span>
+                    <span className="text-[#9A9184]">₹{item.price} each</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center border border-[#3A352E] rounded-md overflow-hidden">
+                      <button
+                        onClick={() => updatePosQty(item.name, -1)}
+                        className="w-6 h-6 bg-[#26231F] text-sm font-bold flex items-center justify-center"
+                      >
+                        −
+                      </button>
+                      <span className="px-2 text-xs font-bold text-[#E5B35C]">{item.qty}</span>
+                      <button
+                        onClick={() => updatePosQty(item.name, 1)}
+                        className="w-6 h-6 bg-[#26231F] text-sm font-bold flex items-center justify-center"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <span className="font-bold tabular-nums w-12 text-right">
+                      ₹{item.price * item.qty}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
-      )}
+
+        {/* Register Summary & Cash Calculator */}
+        <div className="pt-3 border-t border-[#3A352E] space-y-2.5 mt-2">
+          <div className="flex justify-between items-center text-lg font-bold">
+            <span>Total to Collect</span>
+            <span className="text-xl text-[#E5B35C] tabular-nums">₹{posFinalTotal}</span>
+          </div>
+
+          {/* Quick Cash Denomination Calculator */}
+          {posCart.length > 0 && (
+            <div className="space-y-1">
+              <span className="text-[10px] text-[#9A9184] font-bold uppercase">Customer Gave:</span>
+              <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+                {[posFinalTotal, 50, 100, 200, 500].map((amt) => {
+                  if (amt < posFinalTotal && amt !== posFinalTotal) return null;
+                  return (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setCashGiven(amt)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${
+                        cashGiven === amt
+                          ? 'border-[#E5B35C] bg-[#E5B35C]/20 text-[#E5B35C]'
+                          : 'border-[#3A352E] bg-[#26231F] text-[#C7BFB2]'
+                      }`}
+                    >
+                      ₹{amt}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {cashGiven !== null && cashGiven >= posFinalTotal && (
+                <div className="p-2 rounded-lg bg-[#2E2410] border border-amber-500/30 text-amber-300 text-xs font-bold flex justify-between items-center">
+                  <span>Return Change:</span>
+                  <span className="text-base tabular-nums">₹{cashGiven - posFinalTotal}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Payment Execution */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button
+              disabled={isSubmitting || posCart.length === 0}
+              onClick={() => submitPosOrder('CASH')}
+              className="h-12 rounded-xl bg-[#26231F] border border-[#3A352E] font-bold text-xs hover:border-[#E5B35C] active:scale-[0.98] transition-transform disabled:opacity-40"
+            >
+              💵 Collect Cash
+            </button>
+
+            <button
+              disabled={isSubmitting || posCart.length === 0}
+              onClick={() => submitPosOrder('UPI')}
+              className="h-12 rounded-xl bg-[#E5B35C] text-[#1A1206] font-bold text-xs active:scale-[0.98] transition-transform disabled:opacity-40"
+            >
+              ⚡ Collect UPI
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

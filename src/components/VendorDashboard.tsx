@@ -104,7 +104,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
         </button>
 
         <button
-          onClick={() => setActiveTab('more')}
+          onClick={() => { setActiveTab('more'); setMoreSubTab(null); }}
           className={`h-12 lg:h-11 rounded-xl flex items-center justify-center lg:justify-start lg:px-3 gap-3 text-sm font-semibold transition-colors ${
             activeTab === 'more' ? 'bg-[#26231F] text-[#F5F0E8]' : 'text-[#9A9184] hover:text-[#F5F0E8]'
           }`}
@@ -176,17 +176,23 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
             </div>
           )}
 
-          {/* TAB 5: MORE (Sub-Menu for Settings, Analytics & Branding) */}
+          {/* TAB 5: MORE (List View + Sub-Navigation) */}
           {activeTab === 'more' && (
-            <div className="p-4 max-w-4xl mx-auto">
+            <div className="max-w-xl mx-auto p-4 space-y-4 font-sans text-[#F5F0E8]">
               {moreSubTab ? (
                 <div>
-                  <button
-                    onClick={() => setMoreSubTab(null)}
-                    className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[#E5B35C] hover:underline"
-                  >
-                    ← Back to More menu
-                  </button>
+                  <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[#3A352E]">
+                    <button
+                      onClick={() => setMoreSubTab(null)}
+                      className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xl text-[#E5B35C] active:scale-90 transition-transform"
+                      aria-label="Back to More Menu"
+                    >
+                      ←
+                    </button>
+                    <h1 className="text-xl font-bold capitalize">
+                      {moreSubTab.replace('-', ' ')}
+                    </h1>
+                  </div>
 
                   {moreSubTab === 'analytics' && <Analytics vendorId={realVendorId} />}
                   {moreSubTab === 'offers' && <OffersPromos vendorId={realVendorId} />}
@@ -196,74 +202,73 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
                   {moreSubTab === 'settings' && <Settings vendorId={userId} />}
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <h2 className="text-xl font-bold">More Options</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      onClick={() => setMoreSubTab('analytics')}
-                      className="p-4 rounded-xl bg-[#1C1A18] border border-[#3A352E] flex items-center justify-between text-left hover:border-[#E5B35C] transition-colors"
-                    >
-                      <div>
-                        <div className="font-semibold text-base">📊 Sales Analytics</div>
-                        <div className="text-xs text-[#9A9184]">Revenue trends, top dishes & peak hours</div>
-                      </div>
-                      <span className="text-[#9A9184]">›</span>
-                    </button>
+                <div className="space-y-3">
+                  <div className="px-1">
+                    <h2 className="text-xl font-bold">More Options</h2>
+                    <p className="text-xs text-[#9A9184] mt-0.5">
+                      Stall settings, promotions, branding & reports
+                    </p>
+                  </div>
 
-                    <button
-                      onClick={() => setMoreSubTab('offers')}
-                      className="p-4 rounded-xl bg-[#1C1A18] border border-[#3A352E] flex items-center justify-between text-left hover:border-[#E5B35C] transition-colors"
-                    >
-                      <div>
-                        <div className="font-semibold text-base">🎟️ Offers & Promos</div>
-                        <div className="text-xs text-[#9A9184]">Create percentage or flat discounts</div>
-                      </div>
-                      <span className="text-[#9A9184]">›</span>
-                    </button>
-
-                    <button
-                      onClick={() => setMoreSubTab('branding')}
-                      className="p-4 rounded-xl bg-[#1C1A18] border border-[#3A352E] flex items-center justify-between text-left hover:border-[#E5B35C] transition-colors"
-                    >
-                      <div>
-                        <div className="font-semibold text-base">🎨 Branding Studio</div>
-                        <div className="text-xs text-[#9A9184]">Logo, banner, colors & theme modes</div>
-                      </div>
-                      <span className="text-[#9A9184]">›</span>
-                    </button>
-
-                    <button
-                      onClick={() => setMoreSubTab('payment-settings')}
-                      className="p-4 rounded-xl bg-[#1C1A18] border border-[#3A352E] flex items-center justify-between text-left hover:border-[#E5B35C] transition-colors"
-                    >
-                      <div>
-                        <div className="font-semibold text-base">💳 Payment Gateway</div>
-                        <div className="text-xs text-[#9A9184]">Razorpay API keys and counter UPI ID</div>
-                      </div>
-                      <span className="text-[#9A9184]">›</span>
-                    </button>
-
-                    <button
-                      onClick={() => setMoreSubTab('qr-code')}
-                      className="p-4 rounded-xl bg-[#1C1A18] border border-[#3A352E] flex items-center justify-between text-left hover:border-[#E5B35C] transition-colors"
-                    >
-                      <div>
-                        <div className="font-semibold text-base">📱 Store QR Standee</div>
-                        <div className="text-xs text-[#9A9184]">Download and print table ordering QRs</div>
-                      </div>
-                      <span className="text-[#9A9184]">›</span>
-                    </button>
-
-                    <button
-                      onClick={() => setMoreSubTab('settings')}
-                      className="p-4 rounded-xl bg-[#1C1A18] border border-[#3A352E] flex items-center justify-between text-left hover:border-[#E5B35C] transition-colors"
-                    >
-                      <div>
-                        <div className="font-semibold text-base">🏪 Stall Details</div>
-                        <div className="text-xs text-[#9A9184]">Store name, address and master PIN</div>
-                      </div>
-                      <span className="text-[#9A9184]">›</span>
-                    </button>
+                  <div className="bg-[#1C1A18] border border-[#3A352E] rounded-2xl divide-y divide-[#3A352E] overflow-hidden shadow-sm">
+                    {[
+                      {
+                        id: 'analytics',
+                        icon: '📊',
+                        title: 'Sales Analytics',
+                        desc: 'Revenue trends, top dishes & peak hours',
+                      },
+                      {
+                        id: 'offers',
+                        icon: '🎟️',
+                        title: 'Offers & Promos',
+                        desc: 'Create percentage or flat discounts',
+                      },
+                      {
+                        id: 'branding',
+                        icon: '🎨',
+                        title: 'Branding Studio',
+                        desc: 'Logo, banner, colors & theme modes',
+                      },
+                      {
+                        id: 'payment-settings',
+                        icon: '💳',
+                        title: 'Payment Gateway',
+                        desc: 'Razorpay API keys and counter UPI ID',
+                      },
+                      {
+                        id: 'qr-code',
+                        icon: '📱',
+                        title: 'Store QR Standee',
+                        desc: 'Download and print table ordering QRs',
+                      },
+                      {
+                        id: 'settings',
+                        icon: '🏪',
+                        title: 'Stall Details',
+                        desc: 'Store name, address and master PIN',
+                      },
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setMoreSubTab(opt.id)}
+                        className="w-full min-h-[68px] px-4 py-3 flex items-center justify-between text-left hover:bg-[#26231F] active:bg-[#26231F] transition-colors"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0 pr-2">
+                          <span className="text-2xl shrink-0">{opt.icon}</span>
+                          <div className="truncate">
+                            <div className="text-[15px] font-semibold text-white leading-snug truncate">
+                              {opt.title}
+                            </div>
+                            <div className="text-xs text-[#9A9184] truncate mt-0.5">
+                              {opt.desc}
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-lg text-[#9A9184] font-bold shrink-0">›</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
@@ -314,7 +319,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           </button>
 
           <button
-            onClick={() => setActiveTab('more')}
+            onClick={() => { setActiveTab('more'); setMoreSubTab(null); }}
             className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 text-[11px] font-semibold ${
               activeTab === 'more' ? 'text-[#E5B35C]' : 'text-[#9A9184]'
             }`}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '@clerk/clerk-react';
@@ -172,6 +172,26 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
     setShowMoreOptions(Boolean(item.costPrice || item.remarks || item.badgeLabel));
     setShowDishModal(true);
   };
+
+  // Dynamically extract and title-case unique categories to prevent duplicate headers
+  const dynamicCategories = useMemo(() => {
+    const unique = new Set<string>();
+    items.forEach((it) => {
+      const raw = it.category?.trim();
+      const normalized = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : 'Food';
+      unique.add(normalized);
+    });
+    return Array.from(unique);
+  }, [items]);
+
+// Ensure the modal offers default categories plus any existing custom ones (like "Non-veg")
+const modalCategories = useMemo(() => {
+  const set = new Set([...CATEGORIES, ...dynamicCategories]);
+  if (dishCategory && dishCategory.trim()) {
+    set.add(dishCategory.trim());
+  }
+  return Array.from(set);
+}, [dynamicCategories, dishCategory]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -502,7 +522,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
       </div>
 
       {/* ============================================================== */}
-      {/* TAB 1: DISHES (Prototype `.mrow` List with `.tog` & `.sw`)     */}
+      {/* TAB 1: DISHES (Prototype .mrow List)                           */}
       {/* ============================================================== */}
       {activeTab === 'dishes' && (
         <div className="mt-4">
@@ -511,25 +531,27 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
               No dishes on the menu yet. Tap &quot;+ Add a dish&quot; to begin.
             </div>
           ) : (
-            CATEGORIES.map((cat) => {
-              const categoryItems = items.filter((it) => it.category === cat);
+            dynamicCategories.map((cat) => {
+              const categoryItems = items.filter(
+                (it) => (it.category?.trim() || 'Food').toLowerCase() === cat.toLowerCase()
+              );
               if (categoryItems.length === 0) return null;
 
               return (
                 <div key={cat} className="mb-6">
-                  {/* Category Header (`.grp`) */}
+                  {/* Category Header */}
                   <div className="text-xs font-bold uppercase tracking-wider text-[#9A9184] px-4 py-2 bg-[#1C1A18] border-y border-[#3A352E]">
                     {cat} · {categoryItems.length}
                   </div>
 
-                  {/* Dish Rows (`.mrow`) */}
+                  {/* Dish Rows */}
                   <div className="divide-y divide-[#3A352E]">
                     {categoryItems.map((item) => (
                       <div
                         key={item.id}
                         className="grid grid-cols-[16px_1fr_auto] gap-3 items-center min-h-[64px] px-4 py-2 hover:bg-[#1C1A18]/50 transition-colors"
                       >
-                        {/* Veg / Non-Veg Mark (`.vs`) */}
+                        {/* Veg / Non-Veg Mark */}
                         <span
                           role="img"
                           aria-label={item.veg ? 'Veg' : 'Non-veg'}
@@ -546,7 +568,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                           />
                         </span>
 
-                        {/* Dish Details Button (`.mname`) */}
+                        {/* Dish Details */}
                         <button
                           onClick={() => openEditDish(item)}
                           className="block w-full text-left min-h-[52px] py-1 truncate"
@@ -569,7 +591,7 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
                           </span>
                         </button>
 
-                        {/* Actions: Recipe Button + Prototype Toggle Switch (`.tog`) */}
+                        {/* Actions: Recipe + Toggle Switch */}
                         <div className="flex items-center gap-3 shrink-0">
                           <button
                             onClick={() => openRecipeModal(item)}
@@ -786,13 +808,13 @@ export default function MenuEditor({ vendorId }: { vendorId: string }) {
               <div>
                 <span className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">Category</span>
                 <div className="flex gap-2 flex-wrap">
-                  {CATEGORIES.map((cat) => (
+                  {modalCategories.map((cat) => (
                     <button
                       key={cat}
                       type="button"
                       onClick={() => setDishCategory(cat)}
                       className={`min-h-[40px] px-4 rounded-full border text-sm font-semibold transition-colors ${
-                        dishCategory === cat
+                        dishCategory.toLowerCase() === cat.toLowerCase()
                           ? 'bg-[#F5F0E8] text-[#121110] border-[#F5F0E8]'
                           : 'bg-[#26231F] text-[#C7BFB2] border-[#3A352E]'
                       }`}

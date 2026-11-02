@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
 
@@ -60,6 +60,8 @@ export default function Overview({ vendorId }: { vendorId: string }) {
   const [cashAction, setCashAction] = useState<'spent' | 'added'>('spent');
   const [cashAmount, setCashAmount] = useState('');
   const [cashReason, setCashReason] = useState('Milk');
+  const [cashNote, setCashNote] = useState('');
+  const otherInputRef = useRef<HTMLInputElement>(null);
   const [isSubmittingCash, setIsSubmittingCash] = useState(false);
 
   // Closing State (Denomination count)
@@ -205,9 +207,25 @@ export default function Overview({ vendorId }: { vendorId: string }) {
       return;
     }
 
+    // Strictly reject empty or whitespace-only descriptions when "Other" is chosen
+    if (cashAction === 'spent' && cashReason === 'Other' && !cashNote.trim()) {
+      toast.error('Please enter what this cash was spent on');
+      otherInputRef.current?.focus();
+      return;
+    }
+
     setIsSubmittingCash(true);
     try {
       const token = await getToken();
+
+      const finalDescription = cashAction === 'added'
+        ? 'Added Cash'
+        : cashReason === 'Other'
+        ? cashNote.trim()
+        : cashNote.trim()
+        ? `${cashReason}: ${cashNote.trim()}`
+        : `${cashReason} payout`;
+
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/expenses`, {
         method: 'POST',
         headers: {
@@ -217,7 +235,7 @@ export default function Overview({ vendorId }: { vendorId: string }) {
         body: JSON.stringify({
           amount: amt,
           category: cashAction === 'added' ? 'CASH_IN' : cashReason,
-          description: `${cashAction === 'added' ? 'Added Cash' : cashReason} payout`,
+          description: finalDescription,
         }),
       });
 
@@ -225,6 +243,7 @@ export default function Overview({ vendorId }: { vendorId: string }) {
 
       toast.success(cashAction === 'added' ? `₹${amt} added to galla` : `₹${amt} deducted from galla`);
       setCashAmount('');
+      setCashNote('');
       setIsCashModalOpen(false);
       fetchData();
     } catch {
@@ -290,12 +309,13 @@ export default function Overview({ vendorId }: { vendorId: string }) {
           Total today ₹{ledger.sales.toLocaleString('en-IN')} · {ledger.orderCount} orders
         </p>
 
-        {/* Toolbar: Took cash / Added in (`.toolbar` + `.tbtn`) */}
+        {/* Action Toolbar */}
         <div className="flex gap-2 pt-1">
           <button
             onClick={() => {
               setCashAction('spent');
               setCashReason('Milk');
+              setCashNote('');
               setIsCashModalOpen(true);
             }}
             className="min-h-[44px] px-4 rounded-full border border-[#3A352E] bg-[#1C1A18] text-sm font-semibold text-[#F5F0E8] active:scale-95 transition-transform"
@@ -305,6 +325,7 @@ export default function Overview({ vendorId }: { vendorId: string }) {
           <button
             onClick={() => {
               setCashAction('added');
+              setCashNote('');
               setIsCashModalOpen(true);
             }}
             className="min-h-[44px] px-4 rounded-full border border-[#3A352E] bg-[#1C1A18] text-sm font-semibold text-[#F5F0E8] active:scale-95 transition-transform"
@@ -359,7 +380,7 @@ export default function Overview({ vendorId }: { vendorId: string }) {
           </div>
         </div>
 
-        {/* Big Close Day Trigger Button (`.primary.vbig`) */}
+        {/* Big Close Day Trigger Button */}
         <div className="pt-3">
           <button
             onClick={() => {
@@ -413,26 +434,51 @@ export default function Overview({ vendorId }: { vendorId: string }) {
                 </div>
 
                 {cashAction === 'spent' && (
-                  <div>
-                    <label className="block text-xs font-semibold text-[#9A9184] mb-1.5">
-                      What for?
-                    </label>
-                    <div className="flex gap-2 flex-wrap">
-                      {['Milk', 'Vegetables', 'Gas', 'Taken Home', 'Other'].map((r) => (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => setCashReason(r)}
-                          className={`min-h-[40px] px-4 rounded-full border text-sm font-semibold transition-colors ${
-                            cashReason === r
-                              ? 'bg-[#F5F0E8] text-[#121110] border-[#F5F0E8]'
-                              : 'bg-[#26231F] text-[#C7BFB2] border-[#3A352E]'
-                          }`}
-                        >
-                          {r}
-                        </button>
-                      ))}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-[#9A9184] mb-1.5">
+                        What for?
+                      </label>
+                      <div className="flex gap-2 flex-wrap">
+                        {['Milk', 'Vegetables', 'Gas', 'Taken Home', 'Other'].map((r) => (
+                          <button
+                            key={r}
+                            type="button"
+                            onClick={() => {
+                              setCashReason(r);
+                              if (r === 'Other') {
+                                setTimeout(() => otherInputRef.current?.focus(), 50);
+                              }
+                            }}
+                            className={`min-h-[40px] px-4 rounded-full border text-sm font-semibold transition-colors ${
+                              cashReason === r
+                                ? 'bg-[#F5F0E8] text-[#121110] border-[#F5F0E8]'
+                                : 'bg-[#26231F] text-[#C7BFB2] border-[#3A352E]'
+                            }`}
+                          >
+                            {r}
+                          </button>
+                        ))}
+                      </div>
                     </div>
+
+                    {/* Auto-focused required description field when Other is selected */}
+                    {cashReason === 'Other' && (
+                      <div className="animate-in fade-in duration-150">
+                        <label className="block text-xs font-semibold text-[#E5B35C] mb-1">
+                          Specify expense description *
+                        </label>
+                        <input
+                          ref={otherInputRef}
+                          type="text"
+                          required
+                          placeholder="e.g. Ice cubes, tape, cleaning cloth"
+                          value={cashNote}
+                          onChange={(e) => setCashNote(e.target.value)}
+                          className="w-full h-11 rounded-lg bg-[#26231F] border border-[#E5B35C] px-3 text-sm text-white outline-none focus:ring-1 focus:ring-[#E5B35C]"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -459,7 +505,6 @@ export default function Overview({ vendorId }: { vendorId: string }) {
 
   return (
     <div className="p-4 md:p-6 max-w-xl mx-auto space-y-4 text-[#F5F0E8] font-sans pb-32">
-      {/* Top Bar with Back Button */}
       <div className="flex items-center gap-2 pb-2 border-b border-[#3A352E]">
         <button
           onClick={() => setPhase('overview')}
@@ -471,7 +516,6 @@ export default function Overview({ vendorId }: { vendorId: string }) {
       </div>
 
       {phase === 'closed' ? (
-        /* Final Closed Screen with WhatsApp Summary */
         <div className="space-y-4">
           <div className="p-6 text-center space-y-2">
             <div className="w-16 h-16 rounded-full bg-[#F5F0E8] text-[#121110] font-black text-2xl mx-auto flex items-center justify-center">
@@ -493,7 +537,6 @@ export default function Overview({ vendorId }: { vendorId: string }) {
           </button>
         </div>
       ) : closingStep === 'count' ? (
-        /* STEP 1: PHYSICAL BANKNOTE DENOMINATION STEPPER (`.drow`) */
         <div className="space-y-3">
           <h2 className="text-[22px] font-bold">Count the galla</h2>
           <p className="text-sm text-[#C7BFB2]">
@@ -545,7 +588,6 @@ export default function Overview({ vendorId }: { vendorId: string }) {
               </div>
             ))}
 
-            {/* Coins Row (`.coinrow`) */}
             <div className="grid grid-cols-[1fr_140px] gap-2 items-center min-h-[64px] pt-1">
               <span className="font-bold text-lg">Coins (total ₹)</span>
               <input
@@ -569,7 +611,6 @@ export default function Overview({ vendorId }: { vendorId: string }) {
             Skip count today
           </button>
 
-          {/* Sticky Count Bar (`.cbar`) */}
           <div className="fixed left-0 right-0 bottom-0 bg-[#1C1A18] border-t border-[#3A352E] px-4 py-3 z-30 max-w-xl mx-auto space-y-2">
             <div className="text-xl font-bold tabular-nums">
               Counted ₹{countedTotal.toLocaleString('en-IN')}
@@ -583,9 +624,7 @@ export default function Overview({ vendorId }: { vendorId: string }) {
           </div>
         </div>
       ) : (
-        /* STEP 2: RECONCILIATION & ENVELOPE ALLOCATION (`.reveal`) */
         <div className="space-y-3.5">
-          {/* Counted vs Expected */}
           <div className="bg-[#1C1A18] border border-[#3A352E] rounded-xl p-4">
             <div className="flex justify-between items-center text-[15px] font-bold">
               <span>Counted</span>
@@ -599,7 +638,6 @@ export default function Overview({ vendorId }: { vendorId: string }) {
             </button>
           </div>
 
-          {/* Calculation Breakdown Rows */}
           <div className="bg-[#1C1A18] border border-[#3A352E] rounded-xl p-4 divide-y divide-[#3A352E]/60 text-sm">
             <div className="flex justify-between py-2">
               <span>Morning cash float</span>
@@ -619,7 +657,6 @@ export default function Overview({ vendorId }: { vendorId: string }) {
             </div>
           </div>
 
-          {/* Match / Variance Card (`.diffok` / `.diffn`) */}
           <div
             className={`rounded-xl p-4 border font-bold ${
               isMatch
@@ -641,10 +678,9 @@ export default function Overview({ vendorId }: { vendorId: string }) {
             )}
           </div>
 
-          {/* Net Profit Card */}
           <div className="bg-[#1C1A18] border border-[#3A352E] rounded-xl p-4">
             <div className="text-xs font-bold uppercase tracking-wider text-[#9A9184]">
-              Today's Net Profit
+              Today&apos;s Net Profit
             </div>
             <div className="text-3xl font-extrabold text-[#5CC97B] tabular-nums mt-1">
               ₹{ledger.netProfit.toLocaleString('en-IN')}
@@ -654,7 +690,6 @@ export default function Overview({ vendorId }: { vendorId: string }) {
             </p>
           </div>
 
-          {/* Envelope Allocation: Keep in drawer vs Take home (`.env` + `.envc`) */}
           <div className="grid grid-cols-2 gap-2 pt-1">
             <div className="bg-[#26231F] rounded-xl p-3.5 min-h-[132px] flex flex-col justify-between">
               <div>
@@ -692,12 +727,10 @@ export default function Overview({ vendorId }: { vendorId: string }) {
             </div>
           </div>
 
-          {/* Recommended Note Mix */}
           <p className="text-xs text-[#9A9184] px-1">
             Keep: <b className="text-white">{noteMixText}</b>
           </p>
 
-          {/* Final Close Button */}
           <div className="pt-2">
             <button
               onClick={() => {

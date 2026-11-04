@@ -192,13 +192,33 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
               {moreSubTab ? (
                 <div>
                   <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[#3A352E]">
-                    <button
-                      onClick={() => setMoreSubTab(null)}
-                      className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xl text-[#E5B35C] active:scale-90 transition-transform"
-                      aria-label="Back to More Menu"
-                    >
-                      ←
-                    </button>
+                  <button
+          onClick={() => { setActiveTab('more'); setMoreSubTab(null); }}
+          className={`h-12 lg:h-11 rounded-xl flex items-center justify-center lg:justify-start lg:px-3 gap-3 text-sm font-semibold transition-colors ${
+            activeTab === 'more' ? 'bg-[#26231F] text-[#F5F0E8]' : 'text-[#9A9184] hover:text-[#F5F0E8]'
+          }`}
+        >
+          <span className="text-lg">⚙️</span>
+          <span className="hidden lg:inline">More</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            unlockAudio();
+            setIsSoundModalOpen(true);
+          }}
+          className="h-12 lg:h-11 rounded-xl flex items-center justify-center lg:justify-start lg:px-3 gap-3 text-sm font-semibold transition-colors text-[#9A9184] hover:text-[#F5F0E8] hover:bg-[#26231F]"
+          title="Order Notification Sounds"
+        >
+          <span className="text-lg">{soundEnabled ? '🔔' : '🔕'}</span>
+          <span className="hidden lg:inline">Sounds</span>
+        </button>
+
+        <div className="mt-auto pt-3 border-t border-[#3A352E]/60 flex items-center justify-center lg:justify-start lg:px-2 gap-2">
+          <UserButton />
+          <span className="hidden lg:inline text-xs text-[#9A9184]">Account</span>
+        </div>
                     <h1 className="text-xl font-bold capitalize">
                       {moreSubTab.replace('-', ' ')}
                     </h1>

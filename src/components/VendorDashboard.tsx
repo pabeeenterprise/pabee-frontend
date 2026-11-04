@@ -19,7 +19,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
   const [moreSubTab, setMoreSubTab] = useState<string | null>(null);
   const [realVendorId, setRealVendorId] = useState<string | null>(null);
   const [vendorName, setVendorName] = useState('Your Stall');
-  const [soundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [isSoundModalOpen, setIsSoundModalOpen] = useState(false);
 
   // Link Clerk Auth to your Prisma Database
@@ -40,6 +40,22 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
         });
     }
   }, [userId, defaultVendorId]);
+
+  // Unlock Browser Web Audio API on first user interaction
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      unlockAudio();
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+
+    window.addEventListener('click', handleFirstInteraction);
+    window.addEventListener('keydown', handleFirstInteraction);
+    return () => {
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+  }, []);
 
   if (!isLoaded || !realVendorId || !userId) {
     return (
@@ -116,6 +132,20 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           <span className="hidden lg:inline">More</span>
         </button>
 
+        {/* Desktop Sound Library Button */}
+        <button
+          type="button"
+          onClick={() => {
+            unlockAudio();
+            setIsSoundModalOpen(true);
+          }}
+          className="h-12 lg:h-11 rounded-xl flex items-center justify-center lg:justify-start lg:px-3 gap-3 text-sm font-semibold transition-colors text-[#9A9184] hover:text-[#F5F0E8] hover:bg-[#26231F]"
+          title="Notification Sound Library"
+        >
+          <span className="text-lg">{soundEnabled ? '🔔' : '🔕'}</span>
+          <span className="hidden lg:inline">Sounds</span>
+        </button>
+
         <div className="mt-auto pt-3 border-t border-[#3A352E]/60 flex items-center justify-center lg:justify-start lg:px-2 gap-2">
           <UserButton />
           <span className="hidden lg:inline text-xs text-[#9A9184]">Account</span>
@@ -125,7 +155,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
       {/* 2. MAIN ACTIVE VIEWPORT */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
         
-        {/* Prototype Mobile Top Bar (`.v-head`) */}
+        {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between px-4 py-2.5 border-b border-[#3A352E] bg-[#121110] shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-[#E5B35C] text-[#1A1206] font-extrabold text-base grid place-items-center shrink-0">
@@ -140,85 +170,56 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           </div>
 
           <div className="flex items-center gap-2">
-          <button
-  onClick={() => {
-    unlockAudio();
-    setIsSoundModalOpen(true);
-  }}
-  className={`w-9 h-9 rounded-lg border text-sm flex items-center justify-center ${
-    soundEnabled ? 'border-[#3A352E] text-[#F5F0E8]' : 'border-red-500/40 text-red-400 bg-red-500/10'
-  }`}
-  aria-label="Sound Settings"
->
-  {soundEnabled ? '🔔' : '🔕'}
-</button>
+            <button
+              onClick={() => {
+                unlockAudio();
+                setIsSoundModalOpen(true);
+              }}
+              className={`w-9 h-9 rounded-lg border text-sm flex items-center justify-center ${
+                soundEnabled ? 'border-[#3A352E] text-[#F5F0E8]' : 'border-red-500/40 text-red-400 bg-red-500/10'
+              }`}
+              aria-label="Sound Settings"
+            >
+              {soundEnabled ? '🔔' : '🔕'}
+            </button>
             <UserButton />
-            <SoundLibraryModal
-  isOpen={isSoundModalOpen}
-  onClose={() => setIsSoundModalOpen(false)}
-/>
           </div>
         </header>
 
         {/* Content Canvas */}
         <main className="flex-1 overflow-y-auto w-full pb-20 md:pb-0">
-          {/* TAB 1: LIVE ORDERS KDS */}
           {activeTab === 'orders' && (
             <LiveOrders vendorId={realVendorId} mode="queue" soundEnabled={soundEnabled} />
           )}
 
-          {/* TAB 2: RAPID COUNTER POS */}
           {activeTab === 'counter' && (
             <CounterPOS vendorId={realVendorId} />
           )}
 
-          {/* TAB 3: MENU & PANTRY STOCK */}
           {activeTab === 'menu' && (
             <div className="p-4 max-w-5xl mx-auto">
               <MenuEditor vendorId={realVendorId} />
             </div>
           )}
 
-          {/* TAB 4: GALLA / CASH P&L */}
           {activeTab === 'money' && (
             <div className="p-4 max-w-5xl mx-auto">
               <Overview vendorId={realVendorId} />
             </div>
           )}
 
-          {/* TAB 5: MORE (List View + Sub-Navigation) */}
           {activeTab === 'more' && (
             <div className="max-w-xl mx-auto p-4 space-y-4 font-sans text-[#F5F0E8]">
               {moreSubTab ? (
                 <div>
                   <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[#3A352E]">
-                  <button
-          onClick={() => { setActiveTab('more'); setMoreSubTab(null); }}
-          className={`h-12 lg:h-11 rounded-xl flex items-center justify-center lg:justify-start lg:px-3 gap-3 text-sm font-semibold transition-colors ${
-            activeTab === 'more' ? 'bg-[#26231F] text-[#F5F0E8]' : 'text-[#9A9184] hover:text-[#F5F0E8]'
-          }`}
-        >
-          <span className="text-lg">⚙️</span>
-          <span className="hidden lg:inline">More</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            unlockAudio();
-            setIsSoundModalOpen(true);
-          }}
-          className="h-12 lg:h-11 rounded-xl flex items-center justify-center lg:justify-start lg:px-3 gap-3 text-sm font-semibold transition-colors text-[#9A9184] hover:text-[#F5F0E8] hover:bg-[#26231F]"
-          title="Order Notification Sounds"
-        >
-          <span className="text-lg">{soundEnabled ? '🔔' : '🔕'}</span>
-          <span className="hidden lg:inline">Sounds</span>
-        </button>
-
-        <div className="mt-auto pt-3 border-t border-[#3A352E]/60 flex items-center justify-center lg:justify-start lg:px-2 gap-2">
-          <UserButton />
-          <span className="hidden lg:inline text-xs text-[#9A9184]">Account</span>
-        </div>
+                    <button
+                      onClick={() => setMoreSubTab(null)}
+                      className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xl text-[#E5B35C] active:scale-90 transition-transform"
+                      aria-label="Back to More Menu"
+                    >
+                      ←
+                    </button>
                     <h1 className="text-xl font-bold capitalize">
                       {moreSubTab.replace('-', ' ')}
                     </h1>
@@ -306,7 +307,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           )}
         </main>
 
-        {/* 3. PROTOTYPE MOBILE BOTTOM NAVIGATION BAR (`.vnav`) */}
+        {/* 3. MOBILE BOTTOM NAVIGATION */}
         <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#121110] border-t border-[#3A352E] flex items-center justify-around z-40">
           <button
             onClick={() => { setActiveTab('orders'); setMoreSubTab(null); }}
@@ -359,6 +360,14 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           </button>
         </nav>
       </div>
+
+      {/* Global Sound Library Modal */}
+      <SoundLibraryModal
+        isOpen={isSoundModalOpen}
+        onClose={() => setIsSoundModalOpen(false)}
+        soundEnabled={soundEnabled}
+        onToggleSound={() => setSoundEnabled((prev) => !prev)}
+      />
     </div>
   );
 }

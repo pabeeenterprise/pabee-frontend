@@ -12,9 +12,16 @@ import {
 interface SoundLibraryModalProps {
   isOpen: boolean;
   onClose: () => void;
+  soundEnabled: boolean;
+  onToggleSound: () => void;
 }
 
-export default function SoundLibraryModal({ isOpen, onClose }: SoundLibraryModalProps) {
+export default function SoundLibraryModal({
+  isOpen,
+  onClose,
+  soundEnabled,
+  onToggleSound,
+}: SoundLibraryModalProps) {
   const [selected, setSelected] = useState<SoundPreset>(getSavedSoundPreset());
 
   if (!isOpen) return null;
@@ -53,8 +60,39 @@ export default function SoundLibraryModal({ isOpen, onClose }: SoundLibraryModal
           </button>
         </div>
 
-        {/* Option List */}
-        <div className="space-y-2">
+        {/* Master Mute / Unmute Switch */}
+        <div className="p-3.5 rounded-xl bg-[#26231F] border border-[#3A352E] flex items-center justify-between">
+          <div>
+            <span className="text-sm font-semibold text-white block">
+              Audio Notifications
+            </span>
+            <span className="text-xs text-[#9A9184]">
+              {soundEnabled ? 'Alerts will sound on new orders' : 'Terminal is currently muted'}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={onToggleSound}
+            aria-pressed={soundEnabled}
+            className="flex items-center min-h-[44px]"
+          >
+            <span
+              className={`w-11 h-6 rounded-full relative transition-colors ${
+                soundEnabled ? 'bg-[#5CC97B]' : 'bg-[#3A352E]'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  soundEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </span>
+          </button>
+        </div>
+
+        {/* Sound Presets List */}
+        <div className={`space-y-2 ${!soundEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
           {SOUND_OPTIONS.map((opt: SoundOption) => {
             const isCurrent = selected === opt.id;
             return (
@@ -101,7 +139,7 @@ export default function SoundLibraryModal({ isOpen, onClose }: SoundLibraryModal
           onClick={onClose}
           className="w-full h-12 rounded-xl bg-[#E5B35C] text-[#1A1206] font-bold text-sm active:scale-[0.98] transition-transform"
         >
-          Save & Apply Sound
+          Done
         </button>
       </div>
     </div>

@@ -11,7 +11,7 @@ import BrandingStudio from './BrandingStudio';
 import PaymentSettings from './PaymentSettings';
 import CounterPOS from './CounterPOS';
 import SoundLibraryModal from './SoundLibraryModal';
-import { unlockAudio } from '../utils/soundAlerts';
+import { unlockAudio, getSavedSoundPreset, SOUND_OPTIONS } from '../utils/soundAlerts';
 
 export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorId: string }) {
   const { userId, isLoaded } = useAuth();
@@ -22,7 +22,6 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isSoundModalOpen, setIsSoundModalOpen] = useState(false);
 
-  // Link Clerk Auth to your Prisma Database
   useEffect(() => {
     if (userId) {
       fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${userId}/profile`)
@@ -41,7 +40,6 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
     }
   }, [userId, defaultVendorId]);
 
-  // Unlock Browser Web Audio API on first user interaction
   useEffect(() => {
     const handleFirstInteraction = () => {
       unlockAudio();
@@ -56,6 +54,8 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
       window.removeEventListener('keydown', handleFirstInteraction);
     };
   }, []);
+
+  const activeSoundLabel = SOUND_OPTIONS.find((s) => s.id === getSavedSoundPreset())?.label || 'Classic Service Bell';
 
   if (!isLoaded || !realVendorId || !userId) {
     return (
@@ -132,7 +132,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           <span className="hidden lg:inline">More</span>
         </button>
 
-        {/* Desktop Sound Library Button */}
+        {/* Desktop Quick Sound Toggle Button */}
         <button
           type="button"
           onClick={() => {
@@ -140,7 +140,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
             setIsSoundModalOpen(true);
           }}
           className="h-12 lg:h-11 rounded-xl flex items-center justify-center lg:justify-start lg:px-3 gap-3 text-sm font-semibold transition-colors text-[#9A9184] hover:text-[#F5F0E8] hover:bg-[#26231F]"
-          title="Notification Sound Library"
+          title="Notification Sound Settings"
         >
           <span className="text-lg">{soundEnabled ? '🔔' : '🔕'}</span>
           <span className="hidden lg:inline">Sounds</span>
@@ -155,7 +155,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
       {/* 2. MAIN ACTIVE VIEWPORT */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
         
-        {/* Mobile Header */}
+        {/* Mobile Header with Bell Trigger */}
         <header className="md:hidden flex items-center justify-between px-4 py-2.5 border-b border-[#3A352E] bg-[#121110] shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-[#E5B35C] text-[#1A1206] font-extrabold text-base grid place-items-center shrink-0">
@@ -208,6 +208,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
             </div>
           )}
 
+          {/* TAB 5: MORE OPTIONS */}
           {activeTab === 'more' && (
             <div className="max-w-xl mx-auto p-4 space-y-4 font-sans text-[#F5F0E8]">
               {moreSubTab ? (
@@ -237,23 +238,49 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
                   <div className="px-1">
                     <h2 className="text-xl font-bold">More Options</h2>
                     <p className="text-xs text-[#9A9184] mt-0.5">
-                      Stall settings, promotions, branding & reports
+                      Stall settings, promotions, branding & alerts
                     </p>
                   </div>
 
                   <div className="bg-[#1C1A18] border border-[#3A352E] rounded-2xl divide-y divide-[#3A352E] overflow-hidden shadow-sm">
+                    {/* 🔔 DEDICATED SOUND LIBRARY ROW */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        unlockAudio();
+                        setIsSoundModalOpen(true);
+                      }}
+                      className="w-full min-h-[68px] px-4 py-3 flex items-center justify-between text-left hover:bg-[#26231F] active:bg-[#26231F] transition-colors"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0 pr-2">
+                        <span className="text-2xl shrink-0">🔔</span>
+                        <div className="truncate">
+                          <div className="text-[15px] font-semibold text-white leading-snug truncate flex items-center gap-2">
+                            <span>Order Sound Alerts</span>
+                            <span className="text-[10px] px-1.5 py-0.2 bg-[#E5B35C]/20 text-[#E5B35C] rounded font-bold">
+                              {soundEnabled ? 'Enabled' : 'Muted'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-[#9A9184] truncate mt-0.5">
+                            Tone: {activeSoundLabel}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-lg text-[#9A9184] font-bold shrink-0">›</span>
+                    </button>
+
                     {[
                       {
                         id: 'analytics',
                         icon: '📊',
                         title: 'Sales Analytics',
-                        desc: 'Revenue trends, top dishes & peak hours',
+                        desc: 'Revenue trends, top dishes & customer visits',
                       },
                       {
                         id: 'offers',
                         icon: '🎟️',
                         title: 'Offers & Promos',
-                        desc: 'Create percentage or flat discounts',
+                        desc: 'Public deal marquee and discount codes',
                       },
                       {
                         id: 'branding',

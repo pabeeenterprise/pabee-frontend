@@ -1,4 +1,4 @@
-// Web Audio API procedural notification sound library
+// src/utils/soundAlerts.ts
 
 export type SoundPreset = 
   | 'bell_classic' 
@@ -27,6 +27,7 @@ export const SOUND_OPTIONS: SoundOption[] = [
 const STORAGE_KEY = 'pabee_sound_preset';
 
 let audioCtx: AudioContext | null = null;
+let activeOscillators: OscillatorNode[] = []; // 👈 Tracks live nodes to prevent audio stacking
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -40,6 +41,17 @@ function getAudioContext(): AudioContext | null {
     audioCtx.resume().catch(() => {});
   }
   return audioCtx;
+}
+
+// 🛑 Kill any sound currently vibrating the speaker
+export function stopCurrentSound(): void {
+  activeOscillators.forEach((osc) => {
+    try {
+      osc.stop();
+      osc.disconnect();
+    } catch {}
+  });
+  activeOscillators = [];
 }
 
 export function unlockAudio(): void {
@@ -58,7 +70,7 @@ export function unlockAudio(): void {
 export function getSavedSoundPreset(): SoundPreset {
   if (typeof window === 'undefined') return 'bell_classic';
   const saved = localStorage.getItem(STORAGE_KEY) as SoundPreset;
-  return saved && SOUND_OPTIONS.some(o => o.id === saved) ? saved : 'bell_classic';
+  return saved && SOUND_OPTIONS.some((o) => o.id === saved) ? saved : 'bell_classic';
 }
 
 export function saveSoundPreset(preset: SoundPreset): void {
@@ -66,11 +78,21 @@ export function saveSoundPreset(preset: SoundPreset): void {
   localStorage.setItem(STORAGE_KEY, preset);
 }
 
+function registerOsc(osc: OscillatorNode): void {
+  activeOscillators.push(osc);
+  osc.onended = () => {
+    activeOscillators = activeOscillators.filter((o) => o !== osc);
+  };
+}
+
 function synthBell(ctx: AudioContext): void {
   const now = ctx.currentTime;
   const osc1 = ctx.createOscillator();
   const osc2 = ctx.createOscillator();
   const gain = ctx.createGain();
+
+  registerOsc(osc1);
+  registerOsc(osc2);
 
   osc1.type = 'sine';
   osc1.frequency.setValueAtTime(852, now);
@@ -102,6 +124,8 @@ function synthDigitalChime(ctx: AudioContext): void {
     const gain = ctx.createGain();
     const start = now + idx * 0.08;
 
+    registerOsc(osc);
+
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(freq, start);
 
@@ -123,6 +147,8 @@ function synthKitchenBuzzer(ctx: AudioContext): void {
     const gain = ctx.createGain();
     const start = now + offset;
 
+    registerOsc(osc);
+
     osc.type = 'square';
     osc.frequency.setValueAtTime(440, start);
 
@@ -141,6 +167,8 @@ function synthArcadePing(ctx: AudioContext): void {
   const now = ctx.currentTime;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
+
+  registerOsc(osc);
 
   osc.type = 'sine';
   osc.frequency.setValueAtTime(987.77, now);
@@ -161,6 +189,7 @@ function synthTwoTone(ctx: AudioContext): void {
 
   const osc1 = ctx.createOscillator();
   const gain1 = ctx.createGain();
+  registerOsc(osc1);
   osc1.type = 'sine';
   osc1.frequency.setValueAtTime(600, now);
   gain1.gain.setValueAtTime(0.4, now);
@@ -172,6 +201,7 @@ function synthTwoTone(ctx: AudioContext): void {
 
   const osc2 = ctx.createOscillator();
   const gain2 = ctx.createGain();
+  registerOsc(osc2);
   osc2.type = 'sine';
   osc2.frequency.setValueAtTime(900, now + 0.16);
   gain2.gain.setValueAtTime(0.4, now + 0.16);
@@ -183,6 +213,8 @@ function synthTwoTone(ctx: AudioContext): void {
 }
 
 export function playOrderAlert(customPreset?: SoundPreset): void {
+  stopCurrentSound(); // 👈 Strictly ensures 1 sound at a time
+
   const preset = customPreset || getSavedSoundPreset();
 
   if (typeof navigator !== 'undefined' && navigator.vibrate) {

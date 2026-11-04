@@ -842,7 +842,7 @@ const modalCategories = useMemo(() => {
               {/* Photo Upload */}
               <div>
                 <label className="block text-xs font-semibold text-[#C7BFB2] mb-1.5">
-                  Dish photo (Optional)
+                  Dish photo
                 </label>
                 <input
                   type="file"

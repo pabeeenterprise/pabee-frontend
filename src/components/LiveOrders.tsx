@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
+import { playOrderAlert } from '../utils/soundAlerts';
 
 interface OrderItem {
   id?: string;
@@ -41,15 +42,7 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
   // Audio chime for incoming tickets
   const playRing = () => {
     if (!soundEnabled) return;
-    try {
-      const audio = new Audio('/bell.wav');
-      audio.play().catch((e) => console.warn('Audio blocked by browser:', e));
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([200, 100, 200]);
-      }
-    } catch (err) {
-      console.error('Audio ring error', err);
-    }
+    playOrderAlert();
   };
 
   // 1. Fetch only pending/preparing kitchen tickets every 5 seconds

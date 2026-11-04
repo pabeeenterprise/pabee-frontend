@@ -10,6 +10,8 @@ import Settings from './Settings';
 import BrandingStudio from './BrandingStudio';
 import PaymentSettings from './PaymentSettings';
 import CounterPOS from './CounterPOS';
+import SoundLibraryModal from './SoundLibraryModal';
+import { unlockAudio } from '../utils/soundAlerts';
 
 export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorId: string }) {
   const { userId, isLoaded } = useAuth();
@@ -17,7 +19,8 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
   const [moreSubTab, setMoreSubTab] = useState<string | null>(null);
   const [realVendorId, setRealVendorId] = useState<string | null>(null);
   const [vendorName, setVendorName] = useState('Your Stall');
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled] = useState(true);
+  const [isSoundModalOpen, setIsSoundModalOpen] = useState(false);
 
   // Link Clerk Auth to your Prisma Database
   useEffect(() => {
@@ -137,16 +140,23 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className={`w-9 h-9 rounded-lg border text-sm flex items-center justify-center ${
-                soundEnabled ? 'border-[#3A352E] text-[#F5F0E8]' : 'border-red-500/40 text-red-400 bg-red-500/10'
-              }`}
-              aria-label="Toggle notification sounds"
-            >
-              {soundEnabled ? '🔔' : '🔕'}
-            </button>
+          <button
+  onClick={() => {
+    unlockAudio();
+    setIsSoundModalOpen(true);
+  }}
+  className={`w-9 h-9 rounded-lg border text-sm flex items-center justify-center ${
+    soundEnabled ? 'border-[#3A352E] text-[#F5F0E8]' : 'border-red-500/40 text-red-400 bg-red-500/10'
+  }`}
+  aria-label="Sound Settings"
+>
+  {soundEnabled ? '🔔' : '🔕'}
+</button>
             <UserButton />
+            <SoundLibraryModal
+  isOpen={isSoundModalOpen}
+  onClose={() => setIsSoundModalOpen(false)}
+/>
           </div>
         </header>
 

@@ -91,45 +91,48 @@ export default function SoundLibraryModal({
           </button>
         </div>
 
-        {/* Sound Presets List */}
-        <div className={`space-y-2 ${!soundEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
-          {SOUND_OPTIONS.map((opt: SoundOption) => {
+        {/* Unified Prototype Divided List Container */}
+        <div className="bg-[#1C1A18] border border-[#3A352E] rounded-2xl divide-y divide-[#3A352E] overflow-hidden">
+          {SOUND_OPTIONS.filter((opt) => opt.id !== 'audio_file').map((opt: SoundOption) => {
             const isCurrent = selected === opt.id;
             return (
               <div
                 key={opt.id}
                 onClick={() => handleSelectAndTest(opt.id)}
-                className={`p-3.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all active:scale-[0.98] ${
-                  isCurrent
-                    ? 'bg-[#26231F] border-[#E5B35C]'
-                    : 'bg-[#1C1A18] border-[#3A352E] hover:border-[#9A9184]'
+                className={`px-4 py-3 flex items-center justify-between cursor-pointer transition-colors ${
+                  isCurrent ? 'bg-[#26231F]' : 'hover:bg-[#26231F]/50'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{opt.icon}</span>
-                  <div>
-                    <div className="text-sm font-semibold text-white flex items-center gap-2">
-                      {opt.label}
+                <div className="flex items-center gap-3 min-w-0 pr-2">
+                  <span className="text-xl shrink-0">{opt.icon}</span>
+                  <div className="truncate">
+                    <div className="text-sm font-semibold text-white flex items-center gap-2 truncate">
+                      <span>{opt.label}</span>
                       {isCurrent && (
-                        <span className="text-[10px] bg-[#E5B35C] text-[#1A1206] px-1.5 py-0.2 rounded font-extrabold uppercase">
-                          Active
-                        </span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#E5B35C] shrink-0" />
                       )}
                     </div>
-                    <div className="text-xs text-[#9A9184] mt-0.5">{opt.desc}</div>
+                    <div className="text-xs text-[#9A9184] truncate mt-0.5">{opt.desc}</div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSelectAndTest(opt.id);
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-[#121110] border border-[#3A352E] text-xs font-semibold text-[#E5B35C] hover:bg-[#E5B35C] hover:text-[#121110] transition-colors"
-                >
-                  ▶ Test
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectAndTest(opt.id);
+                    }}
+                    className="min-h-[32px] px-3 rounded-full border border-[#3A352E] bg-[#121110] text-xs font-semibold text-[#E5B35C] hover:bg-[#E5B35C] hover:text-[#121110] transition-colors"
+                  >
+                    Test
+                  </button>
+                  {isCurrent ? (
+                    <span className="w-6 text-center text-[#5CC97B] font-bold text-sm">✓</span>
+                  ) : (
+                    <span className="w-6" />
+                  )}
+                </div>
               </div>
             );
           })}

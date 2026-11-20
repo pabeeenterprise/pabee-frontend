@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useCart } from '../context/CartContext';
+import { unlockAudio } from '../utils/soundAlerts';
 
 declare global {
   interface Window {
@@ -215,7 +216,9 @@ export default function Checkout({
 
   const checkLiveStock = async (): Promise<boolean> => {
     try {
-      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu`);
+      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu`, {
+        cache: 'no-store',
+      });
       if (!res.ok) return true;
       const data = await res.json();
       const liveItems: MenuItem[] = data.items || [];
@@ -242,7 +245,9 @@ export default function Checkout({
 
       const orderPayload = {
         vendorId,
-        tableId: tableId || 'Counter',
+        tableId: packIt
+          ? `${tableId && tableId !== 'Counter' && tableId !== 'Table-Unknown' ? `${tableId} · ` : ''}Parcel`
+          : tableId || 'Counter',
         customerName: finalCustomerName,
         customerPhone: phone.trim() || '0000000000',
         paymentMode: finalMode,
@@ -291,6 +296,7 @@ export default function Checkout({
   };
 
   const handlePlaceOrder = async () => {
+    unlockAudio(); // Must run synchronously inside the button tap
     if (cart.length === 0) {
       toast.error('Your cart is empty');
       return;
@@ -338,6 +344,11 @@ export default function Checkout({
             toast.success('Payment verified!');
             await saveFinalOrderToDatabase('RAZORPAY');
           },
+            modal: {
+              ondismiss: () => {
+                setIsSubmitting(false);
+              },
+            },
           prefill: { contact: phone, name: customerName },
           theme: { color: '#E5B35C' },
           config: { display: { preferences: { show_default_blocks: true } } },

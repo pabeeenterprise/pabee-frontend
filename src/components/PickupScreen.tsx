@@ -10,9 +10,11 @@ interface PickupScreenProps {
 
 export default function PickupScreen({ orderId, tokenNumber, onBack }: PickupScreenProps) {
   const [status, setStatus] = useState<string>('pending');
-  const [serverToken, setServerToken] = useState<string | null>(
-    tokenNumber ? String(tokenNumber) : null
-  );
+  const [serverToken, setServerToken] = useState<string | null>(() => {
+    if (tokenNumber) return String(tokenNumber);
+    const savedId = localStorage.getItem('activeOrderId');
+    return savedId === orderId ? localStorage.getItem('activeOrderToken') : null;
+  });
   const [alertArmed, setAlertArmed] = useState<boolean>(true);
 
   const hasRungReadyRef = useRef<boolean>(false);

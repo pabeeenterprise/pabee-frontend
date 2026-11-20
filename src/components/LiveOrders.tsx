@@ -1,16 +1,15 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
-import { playOrderAlert } from '../utils/soundAlerts';
 
-interface OrderItem {
+export interface OrderItem {
   id?: string;
   name: string;
   qty: number;
   price: number;
 }
 
-interface Order {
+export interface Order {
   id: string;
   createdAt: string;
   paymentMode: string;
@@ -25,51 +24,24 @@ interface Order {
 
 interface LiveOrdersProps {
   vendorId: string;
-  mode?: string;
-  soundEnabled?: boolean;
+  orders: Order[];
+  loading: boolean;
+  onRefresh: () => void | Promise<void>;
 }
 
-export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrdersProps) {
-  const [orders, setOrders] = useState<Order[]>([]);
+export default function LiveOrders({
+  vendorId,
+  orders,
+  loading,
+  onRefresh,
+}: LiveOrdersProps) {
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
   const [queueTab, setQueueTab] = useState<'active' | 'history'>('active');
 
   const { getToken } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
-  const prevOrderCountRef = useRef<number>(0);
 
-  // Audio chime for incoming tickets
-  const playRing = () => {
-    if (!soundEnabled) return;
-    playOrderAlert();
-  };
-
-  // 1. Fetch only pending/preparing kitchen tickets every 5 seconds
-  const fetchActiveQueue = async () => {
-    try {
-      const token = await getToken();
-      const headers = { Authorization: `Bearer ${token}` };
-
-      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/kitchen-queue`, { headers });
-      if (res.ok) {
-        const liveData = await res.json();
-        const incomingOrders: Order[] = liveData.orders || [];
-
-        if (prevOrderCountRef.current > 0 && incomingOrders.length > prevOrderCountRef.current) {
-          playRing();
-        }
-        prevOrderCountRef.current = incomingOrders.length;
-        setOrders(incomingOrders);
-      }
-    } catch (err) {
-      console.error('Active queue poll failed', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 2. Fetch completed orders strictly on demand
+  // Fetch completed orders strictly on demand
   const fetchHistory = async () => {
     try {
       const token = await getToken();
@@ -88,19 +60,11 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
     }
   };
 
-  // Run the 5s interval exclusively on active kitchen tickets
-  useEffect(() => {
-    fetchActiveQueue();
-    const interval = setInterval(fetchActiveQueue, 5000);
-    return () => clearInterval(interval);
-  }, [vendorId]);
-
-  // Load history strictly when the cook taps the "Completed History" tab
   useEffect(() => {
     if (queueTab === 'history') {
       fetchHistory();
     }
-  }, [queueTab]);
+  }, [queueTab, vendorId]);
 
   // "To Make Now" Aggregation Across All Unfinished Orders
   const toMakeAggregation = useMemo((): [string, number][] => {
@@ -142,7 +106,7 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
         } else if (status === 'cancelled') {
           toast.error('Order cancelled & stock restored');
         }
-        fetchActiveQueue();
+        onRefresh();
       }
     } catch {
       toast.error('Failed to update status');
@@ -159,7 +123,6 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
 
   return (
     <div className="flex flex-col h-full bg-[#121110] text-[#F5F0E8] overflow-hidden">
-      
       {/* 1. Aggregate "To Make Now" Top Bar */}
       <div className="bg-[#1C1A18] border-b border-[#3A352E] px-4 py-2.5 flex items-center gap-4 overflow-x-auto no-scrollbar shrink-0">
         <span className="text-xs font-bold uppercase tracking-wider text-[#9A9184] shrink-0">
@@ -231,7 +194,6 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
                         : 'bg-[#1C1A18] border-[#3A352E]'
                     }`}
                   >
-                    {/* Urgency Color Accent Strip */}
                     <div
                       className={`absolute left-0 top-0 bottom-0 w-1 ${
                         isLate ? 'bg-red-500' : isSoon ? 'bg-amber-500' : 'bg-transparent'
@@ -239,7 +201,6 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
                     />
 
                     <div className="pl-1">
-                      {/* Ticket Header */}
                       <div className="flex items-center justify-between pb-2 border-b border-[#3A352E]/60">
                         <div className="flex items-center gap-2">
                           <span className="text-2xl font-black text-[#E5B35C] tabular-nums">
@@ -264,12 +225,10 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
                         </div>
                       </div>
 
-                      {/* Customer Name & Cook Notes */}
                       <div className="py-1.5 text-xs text-[#C7BFB2] font-semibold truncate">
                         {order.customerName}
                       </div>
 
-                      {/* Items */}
                       <div className="space-y-1 my-2">
                         {order.items.map((item, idx) => (
                           <div key={idx} className="flex justify-between items-start text-sm">
@@ -285,7 +244,6 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
                       </div>
                     </div>
 
-                    {/* Progression Actions */}
                     <div className="pt-2.5 border-t border-[#3A352E]/60 flex gap-2">
                       {order.kitchenStatus === 'pending' && (
                         <button
@@ -319,7 +277,6 @@ export default function LiveOrders({ vendorId, soundEnabled = true }: LiveOrders
             </div>
           )
         ) : (
-          /* History Sub-View */
           <div className="space-y-2 max-w-4xl mx-auto">
             {historyOrders.length === 0 ? (
               <div className="p-8 text-center text-[#9A9184] text-sm">

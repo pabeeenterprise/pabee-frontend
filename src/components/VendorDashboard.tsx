@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth, UserButton } from '@clerk/clerk-react';
-import LiveOrders from './LiveOrders';
+import toast from 'react-hot-toast';
+import LiveOrders, { type Order } from './LiveOrders';
 import Overview from './Overview';
 import MenuEditor from './MenuEditor';
 import Analytics from './Analytics';
@@ -21,7 +22,9 @@ import {
 } from '../utils/soundAlerts';
 
 export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorId: string }) {
-  const { userId, isLoaded } = useAuth();
+  const { userId, isLoaded, getToken } = useAuth();
+  const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
+
   const [activeTab, setActiveTab] = useState<'orders' | 'counter' | 'menu' | 'money' | 'more'>('orders');
   const [moreSubTab, setMoreSubTab] = useState<string | null>(null);
   const [realVendorId, setRealVendorId] = useState<string | null>(null);
@@ -29,9 +32,28 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [selectedSound, setSelectedSound] = useState<SoundPreset>(() => getSavedSoundPreset());
 
+  // Global Kitchen Queue State (Stays alive across ALL tabs)
+  const [liveOrders, setLiveOrders] = useState<Order[]>([]);
+  const [liveOrdersLoading, setLiveOrdersLoading] = useState(true);
+
+  // Refs to prevent stale closures and double-ringing
+  const seenOrderIdsRef = useRef<Set<string>>(new Set());
+  const hasLoadedInitialRef = useRef<boolean>(false);
+  const soundEnabledRef = useRef<boolean>(soundEnabled);
+  const activeTabRef = useRef<string>(activeTab);
+
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  // 1. Link Clerk Auth to Prisma Database
   useEffect(() => {
     if (userId) {
-      fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${userId}/profile`)
+      fetch(`${API_URL}/api/vendors/${userId}/profile`)
         .then((res) => {
           if (!res.ok) throw new Error('Profile not found');
           return res.json();
@@ -45,8 +67,9 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           setRealVendorId(defaultVendorId);
         });
     }
-  }, [userId, defaultVendorId]);
+  }, [userId, defaultVendorId, API_URL]);
 
+  // 2. Unlock Browser Web Audio API on first user click/tap
   useEffect(() => {
     const handleFirstInteraction = () => {
       unlockAudio();
@@ -62,13 +85,74 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
     };
   }, []);
 
+  // 3. Global Active Kitchen Queue Poller (Fixes 0->1 silent bug & cross-tab silence)
+  const fetchActiveQueue = useCallback(async () => {
+    if (!realVendorId) return;
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/api/vendors/${realVendorId}/kitchen-queue`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const incomingOrders: Order[] = data.orders || [];
+
+      if (!hasLoadedInitialRef.current) {
+        // Initial sync: register existing IDs without ringing
+        incomingOrders.forEach((o) => seenOrderIdsRef.current.add(o.id));
+        hasLoadedInitialRef.current = true;
+      } else {
+        // Subsequent polls: detect genuinely new order IDs
+        const brandNewOrders = incomingOrders.filter(
+          (o) => !seenOrderIdsRef.current.has(o.id)
+        );
+
+        if (brandNewOrders.length > 0) {
+          brandNewOrders.forEach((o) => seenOrderIdsRef.current.add(o.id));
+
+          if (soundEnabledRef.current) {
+            playOrderAlert();
+          }
+
+          // Alert vendor visually if they are on another tab (Galla, Menu, POS, More)
+          const newest = brandNewOrders[brandNewOrders.length - 1];
+          if (activeTabRef.current !== 'orders') {
+            toast.success(
+              `🔔 New Order #${newest.token} (${newest.customerName})`,
+              { duration: 5000 }
+            );
+          }
+        }
+      }
+
+      setLiveOrders(incomingOrders);
+    } catch (err) {
+      console.error('Global kitchen queue poll failed:', err);
+    } finally {
+      setLiveOrdersLoading(false);
+    }
+  }, [realVendorId, getToken, API_URL]);
+
+  useEffect(() => {
+    if (!realVendorId) return;
+    hasLoadedInitialRef.current = false;
+    seenOrderIdsRef.current.clear();
+
+    fetchActiveQueue();
+    const interval = setInterval(fetchActiveQueue, 5000);
+    return () => clearInterval(interval);
+  }, [realVendorId, fetchActiveQueue]);
+
   const handleSelectSound = (id: SoundPreset) => {
     unlockAudio();
     setSelectedSound(id);
     saveSoundPreset(id);
     playOrderAlert(id);
   };
-  
+
   const activeSoundLabel =
     SOUND_OPTIONS.find((s) => s.id === selectedSound)?.label || 'Classic Service Bell';
 
@@ -83,7 +167,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
   return (
     <div className="min-h-screen bg-[#121110] text-[#F5F0E8] font-sans flex flex-col md:flex-row overflow-hidden">
       
-      {/* 1. DESKTOP / TABLET SLIM ICON RAIL (`.vrail`) */}
+      {/* 1. DESKTOP / TABLET SLIM ICON RAIL (5 Core Tabs Only) */}
       <nav aria-label="Sections" className="hidden md:flex flex-col w-20 lg:w-48 border-r border-[#3A352E] bg-[#121110] p-3 gap-2 shrink-0">
         <div className="flex items-center gap-3 px-2 py-3 mb-2 border-b border-[#3A352E]/60">
           <div className="w-10 h-10 rounded-xl bg-[#E5B35C] text-[#1A1206] font-extrabold text-xl grid place-items-center shrink-0">
@@ -99,12 +183,19 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
 
         <button
           onClick={() => { setActiveTab('orders'); setMoreSubTab(null); }}
-          className={`h-12 lg:h-11 rounded-xl flex items-center justify-center lg:justify-start lg:px-3 gap-3 text-sm font-semibold transition-colors ${
+          className={`h-12 lg:h-11 rounded-xl flex items-center justify-center lg:justify-between lg:px-3 gap-3 text-sm font-semibold transition-colors relative ${
             activeTab === 'orders' ? 'bg-[#26231F] text-[#F5F0E8]' : 'text-[#9A9184] hover:text-[#F5F0E8]'
           }`}
         >
-          <span className="text-lg">📋</span>
-          <span className="hidden lg:inline">Orders</span>
+          <span className="flex items-center gap-3">
+            <span className="text-lg">📋</span>
+            <span className="hidden lg:inline">Orders</span>
+          </span>
+          {liveOrders.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-[#E5B35C] text-[#1A1206] text-[10px] font-black tabular-nums">
+              {liveOrders.length}
+            </span>
+          )}
         </button>
 
         <button
@@ -156,7 +247,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
       {/* 2. MAIN ACTIVE VIEWPORT */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
         
-        {/* Mobile Header with Bell Trigger */}
+        {/* Mobile Header (Direct 1-Tap Mute Toggle) */}
         <header className="md:hidden flex items-center justify-between px-4 py-2.5 border-b border-[#3A352E] bg-[#121110] shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-[#E5B35C] text-[#1A1206] font-extrabold text-base grid place-items-center shrink-0">
@@ -171,18 +262,18 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           </div>
 
           <div className="flex items-center gap-2">
-          <button
-  onClick={() => {
-    unlockAudio();
-    setSoundEnabled((prev) => !prev);
-  }}
-  className={`w-9 h-9 rounded-lg border text-sm flex items-center justify-center ${
-    soundEnabled ? 'border-[#3A352E] text-[#F5F0E8]' : 'border-red-500/40 text-red-400 bg-red-500/10'
-  }`}
-  aria-label="Toggle notification sounds"
->
-  {soundEnabled ? '🔔' : '🔕'}
-</button>
+            <button
+              onClick={() => {
+                unlockAudio();
+                setSoundEnabled((prev) => !prev);
+              }}
+              className={`w-9 h-9 rounded-lg border text-sm flex items-center justify-center ${
+                soundEnabled ? 'border-[#3A352E] text-[#F5F0E8]' : 'border-red-500/40 text-red-400 bg-red-500/10'
+              }`}
+              aria-label="Toggle notification sounds"
+            >
+              {soundEnabled ? '🔔' : '🔕'}
+            </button>
             <UserButton />
           </div>
         </header>
@@ -190,7 +281,12 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
         {/* Content Canvas */}
         <main className="flex-1 overflow-y-auto w-full pb-20 md:pb-0">
           {activeTab === 'orders' && (
-            <LiveOrders vendorId={realVendorId} mode="queue" soundEnabled={soundEnabled} />
+            <LiveOrders
+              vendorId={realVendorId}
+              orders={liveOrders}
+              loading={liveOrdersLoading}
+              onRefresh={fetchActiveQueue}
+            />
           )}
 
           {activeTab === 'counter' && (
@@ -223,8 +319,8 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
                       ←
                     </button>
                     <h1 className="text-xl font-bold capitalize">
-  {moreSubTab === 'sounds' ? 'Order Sound Alerts' : moreSubTab.replace('-', ' ')}
-</h1>
+                      {moreSubTab === 'sounds' ? 'Order Sound Alerts' : moreSubTab.replace('-', ' ')}
+                    </h1>
                   </div>
 
                   {moreSubTab === 'analytics' && <Analytics vendorId={realVendorId} />}
@@ -233,80 +329,85 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
                   {moreSubTab === 'payment-settings' && <PaymentSettings vendorId={realVendorId} />}
                   {moreSubTab === 'qr-code' && <MyQRCode vendorId={userId} />}
                   {moreSubTab === 'settings' && <Settings vendorId={userId} />}
+
                   {moreSubTab === 'sounds' && (
-  <div className="space-y-4">
-    <div className="p-4 rounded-2xl bg-[#1C1A18] border border-[#3A352E] flex items-center justify-between">
-      <div>
-        <div className="text-sm font-semibold text-white">Audio Notifications</div>
-        <div className="text-xs text-[#9A9184] mt-0.5">
-          {soundEnabled ? 'Alerts ring automatically on new orders' : 'Terminal alerts are muted'}
-        </div>
-      </div>
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-2xl bg-[#1C1A18] border border-[#3A352E] flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-white">Audio Notifications</div>
+                          <div className="text-xs text-[#9A9184] mt-0.5">
+                            {soundEnabled ? 'Alerts ring automatically on new orders' : 'Terminal alerts are muted'}
+                          </div>
+                        </div>
 
-      <button
-        type="button"
-        onClick={() => setSoundEnabled((prev) => !prev)}
-        aria-pressed={soundEnabled}
-        className="flex items-center min-h-[44px]"
-      >
-        <span
-          className={`w-11 h-6 rounded-full relative transition-colors ${
-            soundEnabled ? 'bg-[#5CC97B]' : 'bg-[#3A352E]'
-          }`}
-        >
-          <span
-            className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-              soundEnabled ? 'translate-x-5' : 'translate-x-0'
-            }`}
-          />
-        </span>
-      </button>
-    </div>
+                        <button
+                          type="button"
+                          onClick={() => setSoundEnabled((prev) => !prev)}
+                          aria-pressed={soundEnabled}
+                          className="flex items-center min-h-[44px]"
+                        >
+                          <span
+                            className={`w-11 h-6 rounded-full relative transition-colors ${
+                              soundEnabled ? 'bg-[#5CC97B]' : 'bg-[#3A352E]'
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                                soundEnabled ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </span>
+                        </button>
+                      </div>
 
-    <div
-      className={`bg-[#1C1A18] border border-[#3A352E] rounded-2xl divide-y divide-[#3A352E] overflow-hidden ${
-        !soundEnabled ? 'opacity-50 pointer-events-none' : ''
-      }`}
-    >
-      {SOUND_OPTIONS.filter((opt) => opt.id !== 'audio_file').map((opt: SoundOption) => {
-        const isCurrent = selectedSound === opt.id;
-        return (
-          <div
-            key={opt.id}
-            onClick={() => handleSelectSound(opt.id)}
-            className={`px-4 py-3.5 flex items-center justify-between cursor-pointer transition-colors ${
-              isCurrent ? 'bg-[#26231F]' : 'hover:bg-[#26231F]/50'
-            }`}
-          >
-            <div className="flex items-center gap-3 min-w-0 pr-2">
-              <span className="text-xl shrink-0">{opt.icon}</span>
-              <div className="truncate">
-                <div className="text-sm font-semibold text-white truncate">{opt.label}</div>
-                <div className="text-xs text-[#9A9184] truncate mt-0.5">{opt.desc}</div>
-              </div>
-            </div>
+                      <div
+                        className={`bg-[#1C1A18] border border-[#3A352E] rounded-2xl divide-y divide-[#3A352E] overflow-hidden ${
+                          !soundEnabled ? 'opacity-50 pointer-events-none' : ''
+                        }`}
+                      >
+                        {SOUND_OPTIONS.filter((opt) => opt.id !== 'audio_file').map((opt: SoundOption) => {
+                          const isCurrent = selectedSound === opt.id;
+                          return (
+                            <div
+                              key={opt.id}
+                              onClick={() => handleSelectSound(opt.id)}
+                              className={`px-4 py-3.5 flex items-center justify-between cursor-pointer transition-colors ${
+                                isCurrent ? 'bg-[#26231F]' : 'hover:bg-[#26231F]/50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0 pr-2">
+                                <span className="text-xl shrink-0">{opt.icon}</span>
+                                <div className="truncate">
+                                  <div className="text-sm font-semibold text-white truncate">
+                                    {opt.label}
+                                  </div>
+                                  <div className="text-xs text-[#9A9184] truncate mt-0.5">
+                                    {opt.desc}
+                                  </div>
+                                </div>
+                              </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleSelectSound(opt.id);
-                }}
-                className="min-h-[32px] px-3 rounded-full border border-[#3A352E] bg-[#121110] text-xs font-semibold text-[#E5B35C] hover:bg-[#E5B35C] hover:text-[#121110] transition-colors"
-              >
-                Test
-              </button>
-              <span className="w-5 text-center text-[#5CC97B] font-bold text-sm">
-                {isCurrent ? '✓' : ''}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-)}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectSound(opt.id);
+                                  }}
+                                  className="min-h-[32px] px-3 rounded-full border border-[#3A352E] bg-[#121110] text-xs font-semibold text-[#E5B35C] hover:bg-[#E5B35C] hover:text-[#121110] transition-colors"
+                                >
+                                  Test
+                                </button>
+                                <span className="w-5 text-center text-[#5CC97B] font-bold text-sm">
+                                  {isCurrent ? '✓' : ''}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -318,7 +419,6 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
                   </div>
 
                   <div className="bg-[#1C1A18] border border-[#3A352E] rounded-2xl divide-y divide-[#3A352E] overflow-hidden shadow-sm">
-
                     {[
                       {
                         id: 'analytics',
@@ -394,11 +494,18 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
         <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#121110] border-t border-[#3A352E] flex items-center justify-around z-40">
           <button
             onClick={() => { setActiveTab('orders'); setMoreSubTab(null); }}
-            className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 text-[11px] font-semibold ${
+            className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 text-[11px] font-semibold relative ${
               activeTab === 'orders' ? 'text-[#E5B35C]' : 'text-[#9A9184]'
             }`}
           >
-            <span className="text-lg">📋</span>
+            <span className="text-lg relative">
+              📋
+              {liveOrders.length > 0 && (
+                <span className="absolute -top-1 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-[#E5B35C] text-[#1A1206] text-[10px] font-black flex items-center justify-center">
+                  {liveOrders.length}
+                </span>
+              )}
+            </span>
             <span>Orders</span>
           </button>
 

@@ -1,15 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useAuth, UserButton } from '@clerk/clerk-react';
 import toast from 'react-hot-toast';
 import LiveOrders, { type Order } from './LiveOrders';
 import Overview from './Overview';
 import MenuEditor from './MenuEditor';
-import Analytics from './Analytics';
-import OffersPromos from './OffersPromos';
-import MyQRCode from './MyQRCode';
-import Settings from './Settings';
-import BrandingStudio from './BrandingStudio';
-import PaymentSettings from './PaymentSettings';
+const Analytics = lazy(() => import('./Analytics'));
+const OffersPromos = lazy(() => import('./OffersPromos'));
+const MyQRCode = lazy(() => import('./MyQRCode'));
+const Settings = lazy(() => import('./Settings'));
+const BrandingStudio = lazy(() => import('./BrandingStudio'));
+const PaymentSettings = lazy(() => import('./PaymentSettings'));
 import CounterPOS from './CounterPOS';
 import {
   unlockAudio,
@@ -41,6 +41,15 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
   const hasLoadedInitialRef = useRef<boolean>(false);
   const soundEnabledRef = useRef<boolean>(soundEnabled);
   const activeTabRef = useRef<string>(activeTab);
+
+  // Track which core tabs have been opened at least once
+const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['orders']));
+
+const switchTab = (tab: 'orders' | 'counter' | 'menu' | 'money' | 'more') => {
+  setActiveTab(tab);
+  setMoreSubTab(null);
+  setVisitedTabs((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
+};
 
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
@@ -280,26 +289,28 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
 
         {/* Content Canvas */}
         <main className="flex-1 overflow-y-auto w-full pb-20 md:pb-0">
-          {activeTab === 'orders' && (
+        <div className={activeTab === 'orders' ? 'h-full' : 'hidden'}>
             <LiveOrders
               vendorId={realVendorId}
               orders={liveOrders}
               loading={liveOrdersLoading}
               onRefresh={fetchActiveQueue}
             />
+          </div>
+
+{visitedTabs.has('counter') && (
+            <div className={activeTab === 'counter' ? 'h-full' : 'hidden'}>
+              <CounterPOS vendorId={realVendorId} />
+            </div>
           )}
 
-          {activeTab === 'counter' && (
-            <CounterPOS vendorId={realVendorId} />
-          )}
-
-          {activeTab === 'menu' && (
-            <div className="p-4 max-w-5xl mx-auto">
+{visitedTabs.has('menu') && (
+            <div className={activeTab === 'menu' ? 'p-4 max-w-5xl mx-auto' : 'hidden'}>
               <MenuEditor vendorId={realVendorId} />
             </div>
           )}
 
-          {activeTab === 'money' && (
+{activeTab === 'money' && (
             <div className="p-4 max-w-5xl mx-auto">
               <Overview vendorId={realVendorId} />
             </div>
@@ -323,12 +334,14 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
                     </h1>
                   </div>
 
-                  {moreSubTab === 'analytics' && <Analytics vendorId={realVendorId} />}
-                  {moreSubTab === 'offers' && <OffersPromos vendorId={realVendorId} />}
-                  {moreSubTab === 'branding' && <BrandingStudio vendorId={userId} />}
-                  {moreSubTab === 'payment-settings' && <PaymentSettings vendorId={realVendorId} />}
-                  {moreSubTab === 'qr-code' && <MyQRCode vendorId={userId} />}
-                  {moreSubTab === 'settings' && <Settings vendorId={userId} />}
+                  <Suspense fallback={<div className="p-8 text-center text-xs text-[#9A9184]">Loading module…</div>}>
+  {moreSubTab === 'analytics' && <Analytics vendorId={realVendorId} />}
+  {moreSubTab === 'offers' && <OffersPromos vendorId={realVendorId} />}
+  {moreSubTab === 'branding' && <BrandingStudio vendorId={userId} />}
+  {moreSubTab === 'payment-settings' && <PaymentSettings vendorId={realVendorId} />}
+  {moreSubTab === 'qr-code' && <MyQRCode vendorId={userId} />}
+  {moreSubTab === 'settings' && <Settings vendorId={userId} />}
+</Suspense>
 
                   {moreSubTab === 'sounds' && (
                     <div className="space-y-4">
@@ -493,7 +506,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
         {/* 3. MOBILE BOTTOM NAVIGATION */}
         <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#121110] border-t border-[#3A352E] flex items-center justify-around z-40">
           <button
-            onClick={() => { setActiveTab('orders'); setMoreSubTab(null); }}
+            onClick={() => switchTab('orders')}
             className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 text-[11px] font-semibold relative ${
               activeTab === 'orders' ? 'text-[#E5B35C]' : 'text-[#9A9184]'
             }`}
@@ -510,7 +523,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           </button>
 
           <button
-            onClick={() => { setActiveTab('counter'); setMoreSubTab(null); }}
+            onClick={() => switchTab('counter')}
             className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 text-[11px] font-semibold ${
               activeTab === 'counter' ? 'text-[#E5B35C]' : 'text-[#9A9184]'
             }`}
@@ -520,7 +533,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           </button>
 
           <button
-            onClick={() => { setActiveTab('menu'); setMoreSubTab(null); }}
+            onClick={() => switchTab('menu')}
             className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 text-[11px] font-semibold ${
               activeTab === 'menu' ? 'text-[#E5B35C]' : 'text-[#9A9184]'
             }`}
@@ -530,7 +543,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           </button>
 
           <button
-            onClick={() => { setActiveTab('money'); setMoreSubTab(null); }}
+            onClick={() => switchTab('money')}
             className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 text-[11px] font-semibold ${
               activeTab === 'money' ? 'text-[#E5B35C]' : 'text-[#9A9184]'
             }`}
@@ -540,7 +553,7 @@ export default function VendorDashboard({ vendorId: defaultVendorId }: { vendorI
           </button>
 
           <button
-            onClick={() => { setActiveTab('more'); setMoreSubTab(null); }}
+            onClick={() => switchTab('more')}
             className={`flex flex-col items-center justify-center flex-1 h-full gap-0.5 text-[11px] font-semibold ${
               activeTab === 'more' ? 'text-[#E5B35C]' : 'text-[#9A9184]'
             }`}

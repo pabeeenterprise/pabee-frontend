@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@clerk/clerk-react';
+import toast from 'react-hot-toast';
 
 type PeriodType = 'day' | 'week' | 'month';
 
@@ -12,6 +13,7 @@ interface OrderItem {
 
 interface Order {
   id: string;
+  token?: number;
   total: number;
   paymentMode: string;
   kitchenStatus: string;
@@ -23,6 +25,12 @@ interface Order {
   created_at?: string | Date;
 }
 
+interface DishStat {
+  name: string;
+  qty: number;
+  revenue: number;
+}
+
 interface CustomerStat {
   phone: string;
   name: string;
@@ -31,12 +39,32 @@ interface CustomerStat {
   lastVisit: Date;
 }
 
+// Separate "[Note: ...]" appended by Checkout.tsx so CRM & Excel stay clean
+function parseCustomerAndNote(raw?: string): { cleanName: string; note: string } {
+  const text = (raw || '').trim();
+  const match = text.match(/^(.*?)\s*\[Note:\s*(.*?)\]$/i);
+  if (match) {
+    return {
+      cleanName: match[1].trim() || 'Walk-in Diner',
+      note: match[2].trim(),
+    };
+  }
+  return { cleanName: text || 'Walk-in Diner', note: '' };
+}
+
+// Prevent Excel formula injection (=, +, -, @) on user-entered text cells
+function safeCell(val: string | number): string | number {
+  if (typeof val === 'number') return val;
+  return /^[=+\-@\t\r]/.test(val) ? `'${val}` : val;
+}
+
 export default function Analytics({ vendorId }: { vendorId: string }) {
   const { getToken } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
 
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [period, setPeriod] = useState<PeriodType>('day');
   const [customerSearch, setCustomerSearch] = useState('');
@@ -130,9 +158,9 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
     };
   }, [filteredOrders]);
 
-  // 4. Top Selling Dishes
-  const topDishes = useMemo(() => {
-    const itemMap: Record<string, { name: string; qty: number; revenue: number }> = {};
+  // 4. Full Dish Performance (Export uses ALL dishes; UI card shows top 6)
+  const allDishStats = useMemo<DishStat[]>(() => {
+    const itemMap: Record<string, DishStat> = {};
 
     filteredOrders.forEach((o) => {
       (o.items || []).forEach((it) => {
@@ -140,34 +168,37 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
         if (!itemMap[cleanName]) {
           itemMap[cleanName] = { name: cleanName, qty: 0, revenue: 0 };
         }
-        itemMap[cleanName].qty += Number(it.qty) || 1;
-        itemMap[cleanName].revenue += (Number(it.price) || 0) * (Number(it.qty) || 1);
+        const qty = Number(it.qty) || 1;
+        const price = Number(it.price) || 0;
+        itemMap[cleanName].qty += qty;
+        itemMap[cleanName].revenue += price * qty;
       });
     });
 
-    return Object.values(itemMap)
-      .sort((a, b) => b.qty - a.qty)
-      .slice(0, 6);
+    return Object.values(itemMap).sort((a, b) => b.qty - a.qty || b.revenue - a.revenue);
   }, [filteredOrders]);
 
-  // 5. Full Customer Intelligence Pool (Unfiltered by Search)
+  const topDishes = useMemo(() => allDishStats.slice(0, 6), [allDishStats]);
+
+  // 5. Full Customer Intelligence Pool (Cleaned of cook notes, unfiltered by search)
   const allCustomers = useMemo(() => {
     const map = new Map<string, CustomerStat>();
 
     filteredOrders.forEach((o) => {
       const ph = (o.customerPhone || '').replace(/\D/g, '');
-      const name = o.customerName?.trim() || 'Walk-in Diner';
+      const { cleanName } = parseCustomerAndNote(o.customerName);
       const amt = Number(o.total) || 0;
       const orderDate = new Date(o.createdAt || o.created_at || Date.now());
 
-      const key = ph.length >= 10 && ph !== '0000000000' ? ph : `anon_${name.toLowerCase()}`;
+      const key =
+        ph.length >= 10 && ph !== '0000000000' ? ph : `anon_${cleanName.toLowerCase()}`;
 
       const existing = map.get(key);
       if (existing) {
         existing.orderCount += 1;
         existing.totalSpent += amt;
-        if (name !== 'Walk-in' && name !== 'Counter Order') {
-          existing.name = name;
+        if (cleanName !== 'Walk-in' && cleanName !== 'Counter Order') {
+          existing.name = cleanName;
         }
         if (orderDate > existing.lastVisit) {
           existing.lastVisit = orderDate;
@@ -175,7 +206,7 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
       } else {
         map.set(key, {
           phone: ph.length >= 10 && ph !== '0000000000' ? ph : 'Direct Walk-in',
-          name,
+          name: cleanName,
           orderCount: 1,
           totalSpent: amt,
           lastVisit: orderDate,
@@ -201,6 +232,143 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
     return allCustomers.filter((c) => c.orderCount > 1).length;
   }, [allCustomers]);
 
+  const retentionPercent =
+    allCustomers.length > 0
+      ? Math.round((repeatCustomersCount / allCustomers.length) * 100)
+      : 0;
+
+  // 7. Dynamic Multi-Sheet Excel (.xlsx) Export (0 kB cost until clicked)
+  const handleExportExcel = async () => {
+    if (filteredOrders.length === 0) {
+      toast.error('No completed orders to export for this period');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+      const wb = XLSX.utils.book_new();
+
+      const periodLabel =
+        period === 'day' ? 'Today' : period === 'week' ? 'Past 7 Days' : 'Past 30 Days';
+      const generatedAt = new Date().toLocaleString('en-IN');
+
+      // Sheet 1: Executive Summary
+      const summaryRows: (string | number)[][] = [
+        ['Sales & Customer Intelligence Report', ''],
+        ['Period', periodLabel],
+        ['Generated At', generatedAt],
+        ['', ''],
+        ['Key Performance Metric', 'Value'],
+        ['Total Revenue (INR)', metrics.grossRevenue],
+        ['Orders Fulfilled', metrics.orderCount],
+        ['Average Ticket (INR)', metrics.avgOrderValue],
+        ['Unique Customers', allCustomers.length],
+        ['Repeat Diners', repeatCustomersCount],
+        ['Customer Retention (%)', `${retentionPercent}%`],
+        ['', ''],
+        ['Payment Settlement Split', 'Amount (INR)', 'Share (%)'],
+        ['UPI / Online', metrics.upiRevenue, `${metrics.upiPercent}%`],
+        ['Cash', metrics.cashRevenue, `${metrics.cashPercent}%`],
+        ['Total', metrics.grossRevenue, '100%'],
+      ];
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+      summarySheet['!cols'] = [{ wch: 28 }, { wch: 22 }, { wch: 14 }];
+      XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+      // Sheet 2: Full Dish Performance (All Dishes)
+      const totalDishRevenue = allDishStats.reduce((s, d) => s + d.revenue, 0);
+      const dishRows: (string | number)[][] = [
+        ['Rank', 'Dish Name', 'Qty Sold', 'Revenue (INR)', 'Revenue Share (%)'],
+        ...allDishStats.map((d, idx) => [
+          idx + 1,
+          safeCell(d.name),
+          d.qty,
+          d.revenue,
+          totalDishRevenue > 0 ? `${Math.round((d.revenue / totalDishRevenue) * 100)}%` : '0%',
+        ]),
+      ];
+      const dishSheet = XLSX.utils.aoa_to_sheet(dishRows);
+      dishSheet['!cols'] = [{ wch: 8 }, { wch: 30 }, { wch: 12 }, { wch: 16 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, dishSheet, 'Dish Performance');
+
+      // Sheet 3: Customer CRM & Frequency
+      const crmRows: (string | number)[][] = [
+        ['Customer Name', 'Mobile Number', 'Visits', 'Segment', 'Total Spent (INR)', 'Avg / Visit (INR)', 'Last Visit'],
+        ...allCustomers.map((c) => [
+          safeCell(c.name),
+          safeCell(c.phone),
+          c.orderCount,
+          c.orderCount > 1 ? 'Regular' : 'First-Time',
+          c.totalSpent,
+          Math.round(c.totalSpent / c.orderCount),
+          c.lastVisit.toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          }),
+        ]),
+      ];
+      const crmSheet = XLSX.utils.aoa_to_sheet(crmRows);
+      crmSheet['!cols'] = [
+        { wch: 24 },
+        { wch: 16 },
+        { wch: 9 },
+        { wch: 12 },
+        { wch: 18 },
+        { wch: 16 },
+        { wch: 15 },
+      ];
+      XLSX.utils.book_append_sheet(wb, crmSheet, 'Customer CRM');
+
+      // Sheet 4: Raw Order Ledger (For Reconciliation & Accounting)
+      const ledgerRows: (string | number)[][] = [
+        ['Date & Time', 'Token #', 'Table / Mode', 'Customer Name', 'Phone', 'Payment', 'Items', 'Cook Note', 'Total (INR)'],
+        ...filteredOrders.map((o) => {
+          const { cleanName, note } = parseCustomerAndNote(o.customerName);
+          const dt = new Date(o.createdAt || o.created_at || Date.now());
+          const itemsSummary = (o.items || [])
+            .map((i) => `${i.qty}x ${i.name}`)
+            .join(', ');
+          return [
+            dt.toLocaleString('en-IN'),
+            o.token ? `#${o.token}` : o.id.slice(-4).toUpperCase(),
+            safeCell(o.tableId || 'Counter'),
+            safeCell(cleanName),
+            safeCell(o.customerPhone && o.customerPhone !== '0000000000' ? o.customerPhone : 'Walk-in'),
+            safeCell(o.paymentMode || 'CASH'),
+            safeCell(itemsSummary),
+            safeCell(note),
+            Number(o.total) || 0,
+          ];
+        }),
+      ];
+      const ledgerSheet = XLSX.utils.aoa_to_sheet(ledgerRows);
+      ledgerSheet['!cols'] = [
+        { wch: 20 },
+        { wch: 10 },
+        { wch: 16 },
+        { wch: 20 },
+        { wch: 15 },
+        { wch: 12 },
+        { wch: 36 },
+        { wch: 22 },
+        { wch: 13 },
+      ];
+      XLSX.utils.book_append_sheet(wb, ledgerSheet, 'Order Ledger');
+
+      const dateSlug = new Date().toISOString().slice(0, 10);
+      const periodSlug = period === 'day' ? 'today' : period === 'week' ? '7d' : '30d';
+      XLSX.writeFile(wb, `pabee-sales-report-${periodSlug}-${dateSlug}.xlsx`);
+      toast.success('Excel report downloaded');
+    } catch (err) {
+      console.error('Excel export failed:', err);
+      toast.error('Failed to generate Excel report');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (isInitialLoading) {
     return (
       <div className="p-8 text-center text-[#9A9184] font-semibold text-sm">
@@ -211,7 +379,7 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
 
   return (
     <div className="space-y-5 text-[#F5F0E8] font-sans pb-12">
-      {/* 1. Header & Quick Period Pill Switcher */}
+      {/* 1. Header, Period Switcher & Export Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#3A352E]">
         <div>
           <div className="flex items-center gap-2">
@@ -227,20 +395,32 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
           </p>
         </div>
 
-        <div className="inline-flex bg-[#1C1A18] border border-[#3A352E] rounded-full p-1 self-start sm:self-auto">
-          {(['day', 'week', 'month'] as PeriodType[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`min-h-[34px] px-4 rounded-full text-xs font-semibold capitalize transition-colors ${
-                period === p
-                  ? 'bg-[#F5F0E8] text-[#121110]'
-                  : 'text-[#9A9184] hover:text-[#F5F0E8]'
-              }`}
-            >
-              {p === 'day' ? 'Today' : p === 'week' ? 'Past 7 Days' : 'Past 30 Days'}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <div className="inline-flex bg-[#1C1A18] border border-[#3A352E] rounded-full p-1">
+            {(['day', 'week', 'month'] as PeriodType[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`min-h-[34px] px-3.5 rounded-full text-xs font-semibold capitalize transition-colors ${
+                  period === p
+                    ? 'bg-[#F5F0E8] text-[#121110]'
+                    : 'text-[#9A9184] hover:text-[#F5F0E8]'
+                }`}
+              >
+                {p === 'day' ? 'Today' : p === 'week' ? 'Past 7 Days' : 'Past 30 Days'}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={isExporting || isRefreshing || filteredOrders.length === 0}
+            className="min-h-[42px] px-4 rounded-full bg-[#E5B35C] text-[#1A1206] text-xs font-bold flex items-center gap-1.5 hover:bg-[#e9bc6e] active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none"
+          >
+            <span>📥</span>
+            <span>{isExporting ? 'Exporting…' : 'Export Excel'}</span>
+          </button>
         </div>
       </div>
 
@@ -280,9 +460,7 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
             {repeatCustomersCount}
           </div>
           <div className="text-[11px] text-[#9A9184] mt-1">
-            {allCustomers.length > 0
-              ? `${Math.round((repeatCustomersCount / allCustomers.length) * 100)}% retention`
-              : 'No visits'}
+            {allCustomers.length > 0 ? `${retentionPercent}% retention` : 'No visits'}
           </div>
         </div>
       </div>

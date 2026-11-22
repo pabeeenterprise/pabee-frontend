@@ -35,37 +35,50 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
   const { getToken } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [period, setPeriod] = useState<PeriodType>('day');
   const [customerSearch, setCustomerSearch] = useState('');
 
-  // 1. Fetch Completed Orders from Sales API
+  // 1. Fetch Bounded Completed Orders with Race-Condition Protection
   useEffect(() => {
+    if (!vendorId) return;
+
+    const controller = new AbortController();
+    const days = period === 'day' ? 1 : period === 'week' ? 7 : 30;
+
     const fetchSalesData = async () => {
-      setIsLoading(true);
+      setIsRefreshing(true);
       try {
         const token = await getToken();
-        const res = await fetch(`${API_URL}/api/vendors/${vendorId}/sales`, {
+        const res = await fetch(`${API_URL}/api/vendors/${vendorId}/sales?days=${days}`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
+          signal: controller.signal,
         });
 
-        if (res.ok) {
+        if (res.ok && !controller.signal.aborted) {
           const data = await res.json();
           setOrders(data.orders || []);
         }
       } catch (err) {
-        console.error('Failed to load sales analytics', err);
+        if ((err as Error)?.name !== 'AbortError') {
+          console.error('Failed to load sales analytics', err);
+        }
       } finally {
-        setIsLoading(false);
+        if (!controller.signal.aborted) {
+          setIsInitialLoading(false);
+          setIsRefreshing(false);
+        }
       }
     };
 
-    if (vendorId) fetchSalesData();
-  }, [vendorId, API_URL]);
+    fetchSalesData();
+    return () => controller.abort();
+  }, [vendorId, period, API_URL, getToken]);
 
-  // 2. Filter Orders by Selected Period (Today, 7 Days, 30 Days)
+  // 2. Exact Local-Midnight Filter for Selected Period (Today, 7 Days, 30 Days)
   const filteredOrders = useMemo(() => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -104,7 +117,7 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
     const orderCount = filteredOrders.length;
     const avgOrderValue = orderCount > 0 ? Math.round(grossRevenue / orderCount) : 0;
     const upiPercent = grossRevenue > 0 ? Math.round((upiRevenue / grossRevenue) * 100) : 0;
-    const cashPercent = 100 - upiPercent;
+    const cashPercent = grossRevenue > 0 ? 100 - upiPercent : 0;
 
     return {
       grossRevenue,
@@ -137,8 +150,8 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
       .slice(0, 6);
   }, [filteredOrders]);
 
-  // 5. Customer Intelligence Ledger (Grouped by Phone Number)
-  const customerLedger = useMemo(() => {
+  // 5. Full Customer Intelligence Pool (Unfiltered by Search)
+  const allCustomers = useMemo(() => {
     const map = new Map<string, CustomerStat>();
 
     filteredOrders.forEach((o) => {
@@ -147,7 +160,6 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
       const amt = Number(o.total) || 0;
       const orderDate = new Date(o.createdAt || o.created_at || Date.now());
 
-      // If no valid phone, track by name or fallback key
       const key = ph.length >= 10 && ph !== '0000000000' ? ph : `anon_${name.toLowerCase()}`;
 
       const existing = map.get(key);
@@ -171,23 +183,25 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
       }
     });
 
-    let list = Array.from(map.values()).sort((a, b) => b.orderCount - a.orderCount || b.totalSpent - a.totalSpent);
+    return Array.from(map.values()).sort(
+      (a, b) => b.orderCount - a.orderCount || b.totalSpent - a.totalSpent
+    );
+  }, [filteredOrders]);
 
-    if (customerSearch.trim()) {
-      const q = customerSearch.trim().toLowerCase();
-      list = list.filter(
-        (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q)
-      );
-    }
-
-    return list;
-  }, [filteredOrders, customerSearch]);
+  // 6. Search-Filtered View for the CRM List Only
+  const customerLedger = useMemo(() => {
+    const q = customerSearch.trim().toLowerCase();
+    if (!q) return allCustomers;
+    return allCustomers.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q)
+    );
+  }, [allCustomers, customerSearch]);
 
   const repeatCustomersCount = useMemo(() => {
-    return customerLedger.filter((c) => c.orderCount > 1).length;
-  }, [customerLedger]);
+    return allCustomers.filter((c) => c.orderCount > 1).length;
+  }, [allCustomers]);
 
-  if (isLoading) {
+  if (isInitialLoading) {
     return (
       <div className="p-8 text-center text-[#9A9184] font-semibold text-sm">
         Calculating business intelligence…
@@ -197,17 +211,22 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
 
   return (
     <div className="space-y-5 text-[#F5F0E8] font-sans pb-12">
-      
-      {/* 1. Header & Quick Period Pill Switcher (No Dropdown Clutter) */}
+      {/* 1. Header & Quick Period Pill Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#3A352E]">
         <div>
-          <h2 className="text-xl font-bold">Sales & Customer Intelligence</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold">Sales & Customer Intelligence</h2>
+            {isRefreshing && (
+              <span className="text-[11px] font-semibold text-[#E5B35C] animate-pulse">
+                Updating…
+              </span>
+            )}
+          </div>
           <p className="text-xs text-[#9A9184] mt-0.5">
             Audit sales, dish performance, and customer repeat visits
           </p>
         </div>
 
-        {/* Clean 3-Option Period Switcher */}
         <div className="inline-flex bg-[#1C1A18] border border-[#3A352E] rounded-full p-1 self-start sm:self-auto">
           {(['day', 'week', 'month'] as PeriodType[]).map((p) => (
             <button
@@ -226,7 +245,11 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
       </div>
 
       {/* 2. Streamlined KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div
+        className={`grid grid-cols-2 sm:grid-cols-4 gap-3 transition-opacity ${
+          isRefreshing ? 'opacity-60' : 'opacity-100'
+        }`}
+      >
         <div className="p-3.5 rounded-xl bg-[#1C1A18] border border-[#3A352E]">
           <div className="text-xs font-semibold text-[#9A9184]">Total Revenue</div>
           <div className="text-2xl font-black text-[#5CC97B] tabular-nums mt-1">
@@ -257,8 +280,8 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
             {repeatCustomersCount}
           </div>
           <div className="text-[11px] text-[#9A9184] mt-1">
-            {customerLedger.length > 0
-              ? `${Math.round((repeatCustomersCount / customerLedger.length) * 100)}% retention`
+            {allCustomers.length > 0
+              ? `${Math.round((repeatCustomersCount / allCustomers.length) * 100)}% retention`
               : 'No visits'}
           </div>
         </div>
@@ -269,7 +292,8 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
         <div className="flex justify-between text-xs font-semibold">
           <span>Payment Settlement Split</span>
           <span className="text-[#9A9184]">
-            UPI ₹{metrics.upiRevenue.toLocaleString('en-IN')} ({metrics.upiPercent}%) · Cash ₹{metrics.cashRevenue.toLocaleString('en-IN')} ({metrics.cashPercent}%)
+            UPI ₹{metrics.upiRevenue.toLocaleString('en-IN')} ({metrics.upiPercent}%) · Cash ₹
+            {metrics.cashRevenue.toLocaleString('en-IN')} ({metrics.cashPercent}%)
           </span>
         </div>
         <div className="h-2 rounded-full bg-[#26231F] overflow-hidden flex">
@@ -325,7 +349,6 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
             </p>
           </div>
 
-          {/* Inline Search Filter */}
           <input
             type="text"
             placeholder="Search name or phone…"
@@ -340,7 +363,10 @@ export default function Analytics({ vendorId }: { vendorId: string }) {
         ) : (
           <div className="divide-y divide-[#3A352E] max-h-80 overflow-y-auto pr-1">
             {customerLedger.map((cust) => (
-              <div key={cust.phone + cust.name} className="py-2.5 flex items-center justify-between text-xs">
+              <div
+                key={cust.phone + cust.name}
+                className="py-2.5 flex items-center justify-between text-xs"
+              >
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-white text-sm">{cust.name}</span>

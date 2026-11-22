@@ -47,7 +47,7 @@ export default function LiveOrders({
       const token = await getToken();
       const headers = { Authorization: `Bearer ${token}` };
 
-      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/sales`, {
+      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/sales?days=1`, {
         headers,
         cache: 'no-store',
       });

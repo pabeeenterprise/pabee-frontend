@@ -298,13 +298,13 @@ const switchTab = (tab: 'orders' | 'counter' | 'menu' | 'money' | 'more') => {
             />
           </div>
 
-{visitedTabs.has('counter') && (
+          {(activeTab === 'counter' || visitedTabs.has('counter')) && (
             <div className={activeTab === 'counter' ? 'h-full' : 'hidden'}>
               <CounterPOS vendorId={realVendorId} />
             </div>
           )}
 
-{visitedTabs.has('menu') && (
+{(activeTab === 'menu' || visitedTabs.has('menu')) && (
             <div className={activeTab === 'menu' ? 'p-4 max-w-5xl mx-auto' : 'hidden'}>
               <MenuEditor vendorId={realVendorId} />
             </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useCart } from '../context/CartContext';
 import { unlockAudio } from '../utils/soundAlerts';
@@ -37,6 +37,13 @@ interface VendorPaymentConfig {
   razorpayKeyId?: string;
 }
 
+interface RazorpayProof {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
+}
+
+const PACKING_FEE_INR = 10;
 const TINTS = ['#F6E7D3', '#F3DCCB', '#EAE3C8', '#E3EBD5', '#F1D9D4', '#E8DFD0'];
 const getTint = (id: string) => {
   const hash = [...(id || 'x')].reduce((acc, c) => acc + c.charCodeAt(0), 0);
@@ -73,51 +80,40 @@ export default function Checkout({
 
   const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
 
-  // 1. Fetch Menu for Cross-Sells & Stock Guards
+  // 1. Parallel Bootstrap: Menu, Promos & Public Payment Config
   useEffect(() => {
-    const fetchMenu = async () => {
+    if (!vendorId) return;
+    const controller = new AbortController();
+
+    const loadCheckoutData = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/vendors/${vendorId}/menu`);
-        if (res.ok) {
-          const data = await res.json();
+        const [menuRes, promoRes, payRes] = await Promise.all([
+          fetch(`${API_URL}/api/vendors/${vendorId}/menu`, { signal: controller.signal }),
+          fetch(`${API_URL}/api/vendors/${vendorId}/promos`, { signal: controller.signal }),
+          fetch(`${API_URL}/api/vendors/${vendorId}/payment/public`, { signal: controller.signal }),
+        ]);
+
+        if (controller.signal.aborted) return;
+
+        if (menuRes.ok) {
+          const data = await menuRes.json();
           setMenu(data.items || []);
         }
-      } catch (err) {
-        console.error('Failed to load menu for cross-sells', err);
-      }
-    };
-    if (vendorId) fetchMenu();
-  }, [vendorId, API_URL]);
 
-  // 2. Fetch Active Promos
-  useEffect(() => {
-    const fetchPromos = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/vendors/${vendorId}/promos`);
-        if (res.ok) {
-          const data = await res.json();
+        if (promoRes.ok) {
+          const data = await promoRes.json();
           const valid = (data.promos || []).filter((p: Promo) => {
-            const isNotExpired = !p.expiresAt || new Date(p.expiresAt) >= new Date();
+            const isNotExpired =
+              !p.expiresAt ||
+              new Date(new Date(p.expiresAt).setHours(23, 59, 59, 999)) >= new Date();
             return p.isActive && isNotExpired;
           });
           setAvailablePromos(valid);
         }
-      } catch (err) {
-        console.error('Failed to load promos', err);
-      }
-    };
-    if (vendorId) fetchPromos();
-  }, [vendorId, API_URL]);
 
-  // 3. Fetch Public Payment Settings
-  useEffect(() => {
-    const fetchPaymentConfig = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/vendors/${vendorId}/payment/public`);
-        if (res.ok) {
-          const data: VendorPaymentConfig = await res.json();
+        if (payRes.ok) {
+          const data: VendorPaymentConfig = await payRes.json();
           setVendorPayment(data);
-
           if (!data.available) {
             setPaymentMode('CASH');
           } else if (data.paymentType === 'RAZORPAY') {
@@ -127,25 +123,38 @@ export default function Checkout({
           }
         }
       } catch (err) {
-        console.error('Failed to load payment config', err);
+        if ((err as Error)?.name !== 'AbortError') {
+          console.error('Failed to load checkout data', err);
+        }
       }
     };
-    if (vendorId) fetchPaymentConfig();
+
+    loadCheckoutData();
+    return () => controller.abort();
   }, [vendorId, API_URL]);
 
-  // 🧮 Computations
+  // 🧮 Computations (Display only — backend recomputes authoritatively)
   const itemTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.qty, 0),
     [cart]
   );
-  const packingFee = packIt ? 10 : 0;
+  const packingFee = packIt ? PACKING_FEE_INR : 0;
   const finalTotal = Math.max(0, itemTotal - discountAmount + packingFee);
+
+  // Prevent stale promo discount if diner edits cart items after applying a code
+  const prevItemTotalRef = useRef(itemTotal);
+  useEffect(() => {
+    if (prevItemTotalRef.current !== itemTotal && appliedPromoCode) {
+      setDiscountAmount(0);
+      setAppliedPromoCode(null);
+      toast('Cart updated — please re-apply your promo code', { icon: 'ℹ️' });
+    }
+    prevItemTotalRef.current = itemTotal;
+  }, [itemTotal, appliedPromoCode]);
 
   const crossSells = useMemo(() => {
     const inCartIds = new Set(cart.map((c) => c.id));
-    return menu
-      .filter((m) => !inCartIds.has(m.id) && m.available !== false)
-      .slice(0, 3);
+    return menu.filter((m) => !inCartIds.has(m.id) && m.available !== false).slice(0, 3);
   }, [menu, cart]);
 
   const prepEstimate = useMemo(() => {
@@ -161,6 +170,13 @@ export default function Checkout({
     const hi = Math.max(lo + 2, Math.round(maxPrep * 1.25));
     return `${lo}–${hi}`;
   }, [cart, menu]);
+
+  const buildOrderItemsPayload = () =>
+    cart.map((c) => ({
+      menuItemId: c.id,
+      name: c.name,
+      qty: c.qty,
+    }));
 
   const handleListenOrder = () => {
     if (!('speechSynthesis' in window)) {
@@ -182,7 +198,7 @@ export default function Checkout({
       const res = await fetch(`${API_URL}/api/vendors/${vendorId}/promos/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, cartItems: cart }),
+        body: JSON.stringify({ code, cartItems: buildOrderItemsPayload() }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -224,9 +240,13 @@ export default function Checkout({
       const liveItems: MenuItem[] = data.items || [];
 
       for (const cartItem of cart) {
-        const dish = liveItems.find((m) => m.name.toLowerCase() === cartItem.name.toLowerCase());
+        const dish =
+          liveItems.find((m) => m.id === cartItem.id) ||
+          liveItems.find((m) => m.name.toLowerCase() === cartItem.name.toLowerCase());
         if (dish && dish.available === false) {
-          toast.error(`"${cartItem.name}" just ran out of stock. Please remove it.`, { duration: 6000 });
+          toast.error(`"${cartItem.name}" just ran out of stock. Please remove it.`, {
+            duration: 6000,
+          });
           return false;
         }
       }
@@ -236,9 +256,11 @@ export default function Checkout({
     }
   };
 
-  const saveFinalOrderToDatabase = async (finalMode: string): Promise<boolean> => {
+  const saveFinalOrderToDatabase = async (
+    finalMode: string,
+    razorpayProof?: RazorpayProof
+  ): Promise<boolean> => {
     try {
-      // Append cook's note to customerName so the kitchen display renders it without schema changes
       const finalCustomerName = cookNote.trim()
         ? `${customerName.trim()} [Note: ${cookNote.trim()}]`
         : customerName.trim();
@@ -251,8 +273,10 @@ export default function Checkout({
         customerName: finalCustomerName,
         customerPhone: phone.trim() || '0000000000',
         paymentMode: finalMode,
-        total: finalTotal,
-        items: cart.map((c) => ({ name: c.name, qty: c.qty, price: c.price })),
+        packIt,
+        promoCode: appliedPromoCode || undefined,
+        items: buildOrderItemsPayload(),
+        ...(razorpayProof || {}),
       };
 
       const res = await fetch(`${API_URL}/api/orders`, {
@@ -264,28 +288,38 @@ export default function Checkout({
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error || 'Order failed. Check ingredient availability.', { duration: 7000 });
+        toast.error(data.error || 'Order failed. Check payment or ingredient availability.', {
+          duration: 7000,
+        });
         setIsSubmitting(false);
         return false;
       }
 
+      const verifiedTotal = typeof data.total === 'number' ? data.total : finalTotal;
       const completedOrder = {
         id: data.id,
         vendorId,
         date: new Date().toISOString(),
         summary: cart.map((c) => `${c.qty}x ${c.name}`).join(' • '),
-        total: finalTotal,
+        total: verifiedTotal,
         rawItems: cart,
       };
       const existingHistory = JSON.parse(localStorage.getItem('pabee_order_history') || '[]');
-      localStorage.setItem('pabee_order_history', JSON.stringify([completedOrder, ...existingHistory].slice(0, 5)));
+      localStorage.setItem(
+        'pabee_order_history',
+        JSON.stringify([completedOrder, ...existingHistory].slice(0, 5))
+      );
 
       localStorage.setItem('activeOrderId', data.id);
       localStorage.setItem('activeOrderToken', data.tokenNumber);
       localStorage.setItem('activeOrderStatus', 'pending');
 
       clearCart();
-      toast.success(`Order #${data.tokenNumber} placed successfully!`);
+      toast.success(
+        razorpayProof
+          ? `Payment verified! Order #${data.tokenNumber} sent to kitchen`
+          : `Order #${data.tokenNumber} placed successfully!`
+      );
       onBack();
       return true;
     } catch (err: any) {
@@ -325,13 +359,21 @@ export default function Checkout({
         const isLoaded = await loadRazorpayScript();
         if (!isLoaded) throw new Error('Razorpay failed to load');
 
+        // Backend calculates authoritative amount from DB items, promo & packIt
         const orderRes = await fetch(`${API_URL}/api/checkout/razorpay`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ vendorId, amount: finalTotal }),
+          body: JSON.stringify({
+            vendorId,
+            items: buildOrderItemsPayload(),
+            promoCode: appliedPromoCode || undefined,
+            packIt,
+          }),
         });
         const orderData = await orderRes.json();
-        if (!orderRes.ok || orderData.error) throw new Error(orderData.error || 'Failed to start payment');
+        if (!orderRes.ok || orderData.error) {
+          throw new Error(orderData.error || 'Failed to start payment');
+        }
 
         const options = {
           key: vendorPayment?.razorpayKeyId,
@@ -340,15 +382,22 @@ export default function Checkout({
           name: 'Food Order',
           description: `Order for ${customerName.trim()}`,
           order_id: orderData.id,
-          handler: async function () {
-            toast.success('Payment verified!');
-            await saveFinalOrderToDatabase('RAZORPAY');
+          handler: async function (response: {
+            razorpay_order_id: string;
+            razorpay_payment_id: string;
+            razorpay_signature: string;
+          }) {
+            await saveFinalOrderToDatabase('RAZORPAY', {
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            });
           },
-            modal: {
-              ondismiss: () => {
-                setIsSubmitting(false);
-              },
+          modal: {
+            ondismiss: () => {
+              setIsSubmitting(false);
             },
+          },
           prefill: { contact: phone, name: customerName },
           theme: { color: '#E5B35C' },
           config: { display: { preferences: { show_default_blocks: true } } },
@@ -372,7 +421,6 @@ export default function Checkout({
   return (
     <div className="min-h-screen bg-[#FFFBF5] dark:bg-[#121110] text-[#1C1A17] dark:text-[#F5F0E8] pb-36 font-sans">
       <div className="max-w-xl mx-auto">
-        
         {/* Top Navigation Bar (`topbar`) */}
         <div className="sticky top-0 z-20 bg-[#FFFBF5] dark:bg-[#121110] border-b border-[#E7DED0] dark:border-[#3A352E] px-4 py-2 flex items-center gap-2">
           <button
@@ -382,7 +430,7 @@ export default function Checkout({
           >
             ←
           </button>
-          
+
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold">Your order</h1>
             <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-[#E7DED0] dark:bg-[#26231F] text-[#5C554B] dark:text-[#C7BFB2]">
@@ -420,7 +468,9 @@ export default function Checkout({
                 >
                   <span
                     className={`w-[7px] h-[7px] ${
-                      item.veg ? 'rounded-full bg-[#0F8A3C]' : 'bg-[#7A3E12] [clip-path:polygon(50%_0,100%_100%,0_100%)]'
+                      item.veg
+                        ? 'rounded-full bg-[#0F8A3C]'
+                        : 'bg-[#7A3E12] [clip-path:polygon(50%_0,100%_100%,0_100%)]'
                     }`}
                   />
                 </span>
@@ -490,11 +540,21 @@ export default function Checkout({
 
         {/* Prototype Prep Time Badge (`box` + `eta`) */}
         <div className="mx-4 mt-4 p-4 rounded-xl bg-white dark:bg-[#1C1A18] border border-[#E7DED0] dark:border-[#3A352E] shadow-sm flex items-center gap-2 font-semibold text-[15px]">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          >
             <circle cx="12" cy="12" r="9" />
             <path d="M12 7v5l3 2" />
           </svg>
-          <span>{packIt ? 'Parcel · ' : ''}Ready in about {prepEstimate} min</span>
+          <span>
+            {packIt ? 'Parcel · ' : ''}Ready in about {prepEstimate} min
+          </span>
         </div>
 
         {/* Prototype Bill Breakdown Box (`box` + `brow`) */}
@@ -508,7 +568,10 @@ export default function Checkout({
             <div className="flex justify-between text-[15px] font-semibold text-[#146C31] dark:text-[#5CC97B] tabular-nums">
               <span className="flex items-center gap-1.5">
                 ✓ Offer: {appliedPromoCode}
-                <button onClick={handleRemovePromo} className="text-xs text-red-500 underline ml-1 font-normal">
+                <button
+                  onClick={handleRemovePromo}
+                  className="text-xs text-red-500 underline ml-1 font-normal"
+                >
                   Remove
                 </button>
               </span>
@@ -519,7 +582,7 @@ export default function Checkout({
           {packIt && (
             <div className="flex justify-between text-[15px] tabular-nums">
               <span>Packing</span>
-              <span>+₹10</span>
+              <span>+₹{PACKING_FEE_INR}</span>
             </div>
           )}
 
@@ -582,11 +645,8 @@ export default function Checkout({
 
         {/* Diner Details Box (`box`) */}
         <div className="mx-4 mt-3 p-4 rounded-xl bg-white dark:bg-[#1C1A18] border border-[#E7DED0] dark:border-[#3A352E] shadow-sm space-y-3.5">
-          {/* 1. Name Input (Strictly Required) */}
           <div>
-            <label className="block text-sm font-semibold mb-1">
-              Your Name *
-            </label>
+            <label className="block text-sm font-semibold mb-1">Your Name *</label>
             <input
               type="text"
               required
@@ -597,7 +657,6 @@ export default function Checkout({
             />
           </div>
 
-          {/* 2. Direct Mobile Number Input */}
           <div>
             <label className="block text-sm font-semibold mb-1">
               Mobile number (for order status) *
@@ -613,11 +672,8 @@ export default function Checkout({
             />
           </div>
 
-          {/* 3. Note for the Cook with Quick-Select Chips */}
           <div>
-            <label className="block text-sm font-semibold mb-1">
-              Note for the cook
-            </label>
+            <label className="block text-sm font-semibold mb-1">Note for the cook</label>
             <input
               type="text"
               placeholder="e.g. less spicy, no onion, less oil"
@@ -642,11 +698,10 @@ export default function Checkout({
               ))}
             </div>
             <p className="text-xs text-[#7A7266] dark:text-[#9A9184] mt-1.5">
-              We&apos;ll pass this directly to the cook.
+              We'll pass this directly to the cook.
             </p>
           </div>
 
-          {/* 4. Takeaway Packaging Checkbox */}
           <button
             type="button"
             onClick={() => setPackIt(!packIt)}
@@ -661,7 +716,7 @@ export default function Checkout({
             >
               ✓
             </span>
-            <span>Pack it to take away (+₹10 packing)</span>
+            <span>Pack it to take away (+₹{PACKING_FEE_INR} packing)</span>
           </button>
         </div>
 
@@ -683,7 +738,9 @@ export default function Checkout({
             >
               <span
                 className={`w-[22px] h-[22px] rounded-full border-2 border-[#7A7266] shrink-0 transition-all ${
-                  paymentMode === 'RAZORPAY' ? 'border-[7px] border-[#1C1A17] dark:border-[#F5F0E8]' : ''
+                  paymentMode === 'RAZORPAY'
+                    ? 'border-[7px] border-[#1C1A17] dark:border-[#F5F0E8]'
+                    : ''
                 }`}
               />
               <div>
@@ -707,7 +764,9 @@ export default function Checkout({
             >
               <span
                 className={`w-[22px] h-[22px] rounded-full border-2 border-[#7A7266] shrink-0 transition-all ${
-                  paymentMode === 'UPI' ? 'border-[7px] border-[#1C1A17] dark:border-[#F5F0E8]' : ''
+                  paymentMode === 'UPI'
+                    ? 'border-[7px] border-[#1C1A17] dark:border-[#F5F0E8]'
+                    : ''
                 }`}
               />
               <div>
@@ -730,7 +789,9 @@ export default function Checkout({
           >
             <span
               className={`w-[22px] h-[22px] rounded-full border-2 border-[#7A7266] shrink-0 transition-all ${
-                paymentMode === 'CASH' ? 'border-[7px] border-[#1C1A17] dark:border-[#F5F0E8]' : ''
+                paymentMode === 'CASH'
+                  ? 'border-[7px] border-[#1C1A17] dark:border-[#F5F0E8]'
+                  : ''
               }`}
             />
             <div>
@@ -746,7 +807,16 @@ export default function Checkout({
         <div className="fixed left-0 right-0 bottom-0 bg-[#FFFBF5] dark:bg-[#121110] border-t border-[#E7DED0] dark:border-[#3A352E] px-4 pt-2.5 pb-5 z-30 max-w-xl mx-auto">
           {discountAmount > 0 && (
             <div className="h-9 rounded-lg bg-[#E7F4EA] dark:bg-[#15291B] text-[#146C31] dark:text-[#5CC97B] font-semibold text-xs flex items-center justify-center gap-1.5 mb-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M5 12.5l4.5 4.5L19 7.5" />
               </svg>
               <span>You save ₹{discountAmount} on this order</span>

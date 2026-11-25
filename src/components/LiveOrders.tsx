@@ -107,9 +107,12 @@ export default function LiveOrders({
           toast.error('Order cancelled & stock restored');
         }
         onRefresh();
+      } else {
+        const errData = await res.json().catch(() => null);
+        toast.error(errData?.error || `Failed to update status (${res.status})`);
       }
     } catch {
-      toast.error('Failed to update status');
+      toast.error('Network error while updating status');
     }
   };
 

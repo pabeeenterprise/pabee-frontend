@@ -19,10 +19,10 @@ export default function Settings({ vendorId }: { vendorId: string }) {
     const fetchProfile = async () => {
       try {
         const token = await getToken(); 
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/vendors/${vendorId}/profile`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/vendor/me`, {
           headers: {
-            'Authorization': `Bearer ${token}` 
-          }
+            Authorization: `Bearer ${token}`,
+          },
         });        
         if (response.ok) {
           const data = await response.json();

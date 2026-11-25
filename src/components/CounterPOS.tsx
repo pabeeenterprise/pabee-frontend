@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@clerk/clerk-react';
+import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 
 interface MenuItem {
@@ -25,77 +26,19 @@ interface RecentOrder {
   total: number;
 }
 
-// 🔲 Self-contained SVG QR code generator matching prototype
-function renderQRCodeSVG(seed: string, size = 200) {
-  const n = 25;
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619) >>> 0;
-  }
-  const rnd = () => {
-    h ^= h << 13;
-    h >>>= 0;
-    h ^= h >>> 17;
-    h ^= h << 5;
-    h >>>= 0;
-    return (h >>> 0) / 4294967296;
-  };
-  const inFinder = (x: number, y: number) =>
-    (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9);
-
-  const rects: { x: number; y: number }[] = [];
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      if (inFinder(x, y)) continue;
-      if (rnd() < 0.47) rects.push({ x, y });
-    }
-  }
-
-  const finders = [
-    { x: 0, y: 0 },
-    { x: n - 7, y: 0 },
-    { x: 0, y: n - 7 },
-  ];
-
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`-1 -1 ${n + 2} ${n + 2}`}
-      shapeRendering="crispEdges"
-      className="bg-white p-2 rounded-xl"
-    >
-      <rect x="-1" y="-1" width={n + 2} height={n + 2} fill="#fff" />
-      <g fill="#1C1A17">
-        {rects.map((r, i) => (
-          <rect key={i} x={r.x} y={r.y} width="1" height="1" />
-        ))}
-        {finders.map((f, i) => (
-          <g key={`f-${i}`}>
-            <rect x={f.x} y={f.y} width="7" height="7" />
-            <rect x={f.x + 1} y={f.y + 1} width="5" height="5" fill="#fff" />
-            <rect x={f.x + 2} y={f.y + 2} width="3" height="3" fill="#1C1A17" />
-          </g>
-        ))}
-      </g>
-    </svg>
-  );
-}
-
 export default function CounterPOS({ vendorId }: { vendorId: string }) {
   const { getToken } = useAuth();
   const API_URL = import.meta.env.VITE_API_URL || 'https://pabee-backend-asia.onrender.com';
 
   // Menu & Settings
   const [menu, setMenu] = useState<MenuItem[]>([]);
-  const [upiId, setUpiId] = useState('sharmasnacks@ybl');
+  const [upiId, setUpiId] = useState('');
   const [shopName, setShopName] = useState('Your Stall');
   const [isLoading, setIsLoading] = useState(true);
 
   // POS State Machine: 'build' | 'cash' | 'change' | 'upi' | 'done'
   const [step, setStep] = useState<'build' | 'cash' | 'change' | 'upi' | 'done'>('build');
-  const [createdToken, setCreatedToken] = useState<number | null>(null);
+  const [createdToken, setCreatedToken] = useState<string | null>(null);
 
   // Cart & Modifiers
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -112,26 +55,12 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
   const [cashGiven, setCashGiven] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Recent Frequent Orders Memory
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([
-    {
-      label: 'Chai + Vada Pav',
-      total: 45,
-      items: [
-        { id: '1', name: 'Cutting Chai', price: 20, qty: 1 },
-        { id: '2', name: 'Vada Pav', price: 25, qty: 1 },
-      ],
-    },
-    {
-      label: '2 × Vada Pav',
-      total: 50,
-      items: [{ id: '2', name: 'Vada Pav', price: 25, qty: 2 }],
-    },
-  ]);
+  // Real session recent orders only (no fake hardcoded menu IDs)
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Fetch Menu & Payment Details
+  // 1. Fetch Menu, UPI Payment Settings & Stall Name
   useEffect(() => {
     const initPOS = async () => {
       try {
@@ -140,18 +69,18 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
 
         const [menuRes, paymentRes, profileRes] = await Promise.all([
           fetch(`${API_URL}/api/vendors/${vendorId}/menu-editor`, { headers }),
-          fetch(`${API_URL}/api/vendors/${vendorId}/payment/public`),
+          fetch(`${API_URL}/api/vendors/${vendorId}/payment`, { headers }),
           fetch(`${API_URL}/api/vendors/${vendorId}/profile`),
         ]);
 
         if (menuRes.ok) {
           const menuData = await menuRes.json();
-          // Generate deterministic 2-letter shortcuts (e.g., "Vada Pav" -> "VP")
           const processedMenu = (menuData.items || []).map((m: MenuItem) => {
             const words = m.name.trim().split(/\s+/);
-            const shortcut = words.length >= 2
-              ? `${words[0][0]}${words[1][0]}`.toUpperCase()
-              : m.name.slice(0, 2).toUpperCase();
+            const shortcut =
+              words.length >= 2
+                ? `${words[0][0]}${words[1][0]}`.toUpperCase()
+                : m.name.slice(0, 2).toUpperCase();
             return { ...m, code: m.code || shortcut };
           });
           setMenu(processedMenu);
@@ -174,7 +103,7 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
     };
 
     if (vendorId) initPOS();
-  }, [vendorId, API_URL]);
+  }, [vendorId, API_URL, getToken]);
 
   // Calculations
   const rawSubtotal = useMemo(
@@ -186,7 +115,8 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
     [cart]
   );
   const packingFee = isParcel ? 10 : 0;
-  const finalTotal = Math.max(0, rawSubtotal - discountAmount + packingFee);
+  const safeDiscount = Math.min(discountAmount, rawSubtotal);
+  const finalTotal = Math.max(0, rawSubtotal - safeDiscount + packingFee);
 
   // Categories
   const categories = useMemo(() => {
@@ -220,11 +150,9 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
   // Cart Operations
   const addItemToCart = (item: MenuItem) => {
     setCart((prev) => {
-      const existing = prev.find((c) => c.name.toLowerCase() === item.name.toLowerCase());
+      const existing = prev.find((c) => c.id === item.id);
       if (existing) {
-        return prev.map((c) =>
-          c.name.toLowerCase() === item.name.toLowerCase() ? { ...c, qty: c.qty + 1 } : c
-        );
+        return prev.map((c) => (c.id === item.id ? { ...c, qty: c.qty + 1 } : c));
       }
       return [...prev, { id: item.id, name: item.name, price: item.price, qty: 1 }];
     });
@@ -232,10 +160,10 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
     if (searchInputRef.current) searchInputRef.current.focus();
   };
 
-  const updateCartQty = (name: string, delta: number) => {
+  const updateCartQty = (id: string, delta: number) => {
     setCart((prev) =>
       prev
-        .map((c) => (c.name === name ? { ...c, qty: c.qty + delta } : c))
+        .map((c) => (c.id === id ? { ...c, qty: c.qty + delta } : c))
         .filter((c) => c.qty > 0)
     );
   };
@@ -250,8 +178,8 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
     setCashGiven(0);
   };
 
-  // Submit Final Order to Backend
-  const submitOrder = async (mode: 'CASH' | 'UPI') => {
+  // Submit Counter Order to Authenticated Staff Endpoint
+  const submitOrder = async (mode: 'CASH' | 'UPI', paidCashAmount = 0) => {
     if (cart.length === 0) {
       toast.error('Cart is empty');
       return;
@@ -261,16 +189,16 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
     try {
       const token = await getToken();
       const payload = {
-        vendorId,
         tableId: isParcel ? 'Parcel' : 'Counter',
         customerName: customerName.trim() || 'Counter Walk-up',
         customerPhone: '0000000000',
         paymentMode: mode,
-        total: finalTotal,
-        items: cart.map((c) => ({ name: c.name, qty: c.qty, price: c.price })),
+        packIt: isParcel,
+        manualDiscount: safeDiscount,
+        items: cart.map((c) => ({ menuItemId: c.id, name: c.name, qty: c.qty })),
       };
 
-      const res = await fetch(`${API_URL}/api/orders`, {
+      const res = await fetch(`${API_URL}/api/vendors/${vendorId}/counter-orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -287,20 +215,21 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
         return;
       }
 
-      const tokenNum = data.tokenNumber || 1;
+      const tokenNum = String(data.tokenNumber || '1');
+      const serverTotal = typeof data.total === 'number' ? data.total : finalTotal;
       setCreatedToken(tokenNum);
 
-      // Add to recent orders strip
+      // Add to recent orders strip using real DB items
       const newRecent: RecentOrder = {
         label: cart.map((c) => (c.qty > 1 ? `${c.qty}× ${c.name}` : c.name)).join(' + '),
-        total: finalTotal,
+        total: serverTotal,
         items: [...cart],
       };
       setRecentOrders((prev) => [newRecent, ...prev.slice(0, 4)]);
 
-      // State progression
+      // Use paidCashAmount parameter directly (avoids React setState lag)
       if (mode === 'CASH') {
-        const changeDue = cashGiven - finalTotal;
+        const changeDue = paidCashAmount - serverTotal;
         if (changeDue > 0) {
           setStep('change');
         } else {
@@ -325,7 +254,7 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
   }
 
   // ==========================================
-  // STEP 2: CASH GIVEN SELECTION (`gaveT`)
+  // STEP 2: CASH GIVEN SELECTION
   // ==========================================
   if (step === 'cash') {
     const cashOptions = [finalTotal, 50, 100, 200, 500, 2000].filter(
@@ -357,7 +286,7 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
               disabled={isSubmitting}
               onClick={() => {
                 setCashGiven(amt);
-                submitOrder('CASH');
+                submitOrder('CASH', amt);
               }}
               className="min-h-[64px] rounded-xl border border-[#3A352E] bg-[#1C1A18] font-bold text-xl tabular-nums hover:border-[#E5B35C] active:scale-95 transition-all flex items-center justify-center disabled:opacity-40"
             >
@@ -370,15 +299,15 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
   }
 
   // ==========================================
-  // STEP 3: CHANGE RETURN SCREEN (`returnT`)
+  // STEP 3: CHANGE RETURN SCREEN
   // ==========================================
   if (step === 'change') {
-    const returnChange = cashGiven - finalTotal;
+    const returnChange = Math.max(0, cashGiven - finalTotal);
 
     return (
       <div className="min-h-[75vh] flex flex-col items-center justify-center p-6 text-center font-sans text-[#F5F0E8] space-y-3">
         <div className="text-sm font-semibold text-[#9A9184]">
-          Customer gave ₹{cashGiven}
+          Token #{createdToken} · Customer gave ₹{cashGiven}
         </div>
 
         <div className="text-5xl font-black text-[#5CC97B] tabular-nums py-2">
@@ -401,10 +330,13 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
   }
 
   // ==========================================
-  // STEP 4: CUSTOMER UPI QR CODE (`scanPay`)
+  // STEP 4: REAL SCANNABLE CUSTOMER UPI QR CODE
   // ==========================================
   if (step === 'upi') {
-    const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(shopName)}&am=${finalTotal}&cu=INR`;
+    const hasValidUpi = Boolean(upiId && upiId.includes('@'));
+    const upiLink = hasValidUpi
+      ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(shopName)}&am=${finalTotal}&cu=INR`
+      : '';
 
     return (
       <div className="p-4 max-w-md mx-auto space-y-4 font-sans text-[#F5F0E8]">
@@ -420,13 +352,26 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
             Show this to the customer
           </div>
 
-          {renderQRCodeSVG(upiLink, 220)}
+          {hasValidUpi ? (
+            <div className="bg-white p-3 rounded-xl">
+              <QRCodeSVG value={upiLink} size={220} level="M" bgColor="#ffffff" fgColor="#1C1A17" />
+            </div>
+          ) : (
+            <div className="w-[220px] h-[220px] rounded-xl bg-[#26231F] border border-amber-500/40 flex flex-col items-center justify-center p-4 text-center">
+              <span className="text-sm font-bold text-amber-400">No UPI ID Saved</span>
+              <span className="text-xs text-[#9A9184] mt-1">
+                Add your Merchant UPI ID in More → Payment Settings, or use your physical counter QR.
+              </span>
+            </div>
+          )}
 
           <div className="font-bold text-base">{shopName}</div>
           <div className="text-3xl font-extrabold text-[#E5B35C] tabular-nums">
             ₹{finalTotal}
           </div>
-          <div className="text-xs text-[#9A9184]">Scan with any UPI app to pay</div>
+          <div className="text-xs text-[#9A9184]">
+            {hasValidUpi ? `Paying ${upiId}` : 'Verify payment on your soundbox/phone before confirming'}
+          </div>
         </div>
 
         <button
@@ -441,7 +386,7 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
   }
 
   // ==========================================
-  // STEP 5: TOKEN ISSUED SCREEN (`done`)
+  // STEP 5: TOKEN ISSUED SCREEN
   // ==========================================
   if (step === 'done') {
     return (
@@ -468,15 +413,12 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
   }
 
   // ==========================================
-  // STEP 1: RAPID ORDER BUILD TERMINAL (`build`)
+  // STEP 1: RAPID ORDER BUILD TERMINAL
   // ==========================================
   return (
     <div className="flex flex-col lg:flex-row h-full bg-[#121110] text-[#F5F0E8] font-sans overflow-hidden">
-      
       {/* LEFT COLUMN: Search, Recents, Tabs & Tile Grid */}
       <div className="flex-1 flex flex-col p-3 overflow-hidden min-h-0">
-        
-        {/* Code & Dish Search Bar (`.posbar`) */}
         <div className="flex gap-2 shrink-0">
           <div className="flex-1 h-12 rounded-lg bg-[#26231F] border border-[#3A352E] flex items-center px-3 gap-2">
             <span className="text-[#9A9184]">🔍</span>
@@ -501,7 +443,6 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
           </div>
         </div>
 
-        {/* Code Hit Banner (`.codehit`) */}
         {codeHit && (
           <button
             onClick={() => addItemToCart(codeHit)}
@@ -514,7 +455,6 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
           </button>
         )}
 
-        {/* Frequent Recent Combos Strip (`.recent`) */}
         {recentOrders.length > 0 && !searchCode && (
           <div className="flex gap-2 overflow-x-auto no-scrollbar py-2 shrink-0">
             {recentOrders.map((ro, idx) => (
@@ -523,8 +463,12 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
                 onClick={() => {
                   ro.items.forEach((it) => {
                     setCart((prev) => {
-                      const ex = prev.find((c) => c.name === it.name);
-                      if (ex) return prev.map((c) => (c.name === it.name ? { ...c, qty: c.qty + it.qty } : c));
+                      const ex = prev.find((c) => c.id === it.id);
+                      if (ex) {
+                        return prev.map((c) =>
+                          c.id === it.id ? { ...c, qty: c.qty + it.qty } : c
+                        );
+                      }
                       return [...prev, { ...it }];
                     });
                   });
@@ -537,7 +481,6 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
           </div>
         )}
 
-        {/* Category Tabs (`.ptabs`) */}
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-1 shrink-0">
           {categories.map((c) => (
             <button
@@ -557,10 +500,9 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
           ))}
         </div>
 
-        {/* 3-Column Item Tile Grid (`.posgrid` + `.ptile`) */}
         <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 py-2 pr-1 min-h-0">
           {displayedItems.map((item) => {
-            const inCart = cart.find((c) => c.name.toLowerCase() === item.name.toLowerCase());
+            const inCart = cart.find((c) => c.id === item.id);
             const qty = inCart?.qty || 0;
             const isSoldOut = item.available === false;
 
@@ -575,7 +517,6 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
                     : 'bg-[#1C1A18] border-[#3A352E] hover:border-[#E5B35C]'
                 }`}
               >
-                {/* Veg / Non-veg dot */}
                 <span
                   className={`w-3.5 h-3.5 border-[1.5px] rounded-[2px] inline-grid place-items-center absolute top-2 right-2 shrink-0 ${
                     item.veg ? 'border-[#34B866]' : 'border-[#C77A45]'
@@ -598,7 +539,6 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
                   ₹{item.price}
                 </div>
 
-                {/* Overlapping Counter Bubble (`.cnt`) */}
                 {qty > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 min-w-[28px] h-7 rounded-full bg-[#E5B35C] text-[#1A1206] font-bold text-sm grid place-items-center px-1.5 tabular-nums shadow-md">
                     {qty}
@@ -610,10 +550,9 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
         </div>
       </div>
 
-      {/* RIGHT REGISTER / BOTTOM DOCKED PANEL (`.pospanel`) */}
+      {/* RIGHT REGISTER / BOTTOM DOCKED PANEL */}
       <div className="w-full lg:w-96 bg-[#1C1A18] border-t lg:border-t-0 lg:border-l border-[#3A352E] p-3 flex flex-col justify-between shrink-0 shadow-xl max-h-[50vh] lg:max-h-none overflow-y-auto">
         <div>
-          {/* Header Summary (`.ptop` + `.ptot`) */}
           <button
             onClick={() => setIsPanelOpen(!isPanelOpen)}
             className="w-full flex items-center justify-between min-h-[44px] pb-2 border-b border-[#3A352E]"
@@ -625,11 +564,13 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
                     {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'} · ₹{finalTotal}
                   </>
                 ) : (
-                  <span className="text-sm font-semibold text-[#7A7266]">Tap dishes to add them</span>
+                  <span className="text-sm font-semibold text-[#7A7266]">
+                    Tap dishes to add them
+                  </span>
                 )}
               </span>
-              {discountAmount > 0 && (
-                <span className="text-xs text-[#5CC97B] font-bold ml-2">−₹{discountAmount}</span>
+              {safeDiscount > 0 && (
+                <span className="text-xs text-[#5CC97B] font-bold ml-2">−₹{safeDiscount}</span>
               )}
             </div>
             <span className="text-sm font-bold text-[#7A7266] lg:hidden">
@@ -637,14 +578,13 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
             </span>
           </button>
 
-          {/* Cart Item Lines (`.pline`) */}
           <div
             className={`divide-y divide-[#3A352E]/60 max-h-48 overflow-y-auto pr-1 my-2 ${
               !isPanelOpen ? 'hidden lg:block' : 'block'
             }`}
           >
             {cart.map((c) => (
-              <div key={c.name} className="py-2 flex items-center justify-between text-xs">
+              <div key={c.id} className="py-2 flex items-center justify-between text-xs">
                 <div className="truncate pr-2">
                   <span className="font-semibold text-white block truncate">{c.name}</span>
                   <span className="text-[#9A9184]">₹{c.price * c.qty}</span>
@@ -652,14 +592,14 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
 
                 <div className="w-24 h-8 rounded-lg bg-[#E5B35C] text-[#1A1206] flex items-center justify-between font-bold text-xs shrink-0">
                   <button
-                    onClick={() => updateCartQty(c.name, -1)}
+                    onClick={() => updateCartQty(c.id, -1)}
                     className="w-8 h-8 text-base text-center"
                   >
                     −
                   </button>
                   <span>{c.qty}</span>
                   <button
-                    onClick={() => updateCartQty(c.name, 1)}
+                    onClick={() => updateCartQty(c.id, 1)}
                     className="w-8 h-8 text-base text-center"
                   >
                     +
@@ -669,9 +609,7 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
             ))}
           </div>
 
-          {/* Register Options (`.popts`) */}
           <div className="flex gap-2 flex-wrap items-center py-2">
-            {/* Parcel Switch */}
             <button
               onClick={() => setIsParcel(!isParcel)}
               className="flex items-center gap-1.5 text-xs font-semibold text-[#C7BFB2]"
@@ -690,7 +628,6 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
               <span>Parcel (+₹10)</span>
             </button>
 
-            {/* + Name */}
             {showNameInput ? (
               <input
                 type="text"
@@ -708,15 +645,13 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
               </button>
             )}
 
-            {/* Discount */}
             <button
               onClick={() => setShowDiscountSheet(true)}
               className="min-h-[32px] px-3 rounded-full border border-[#3A352E] text-xs font-semibold"
             >
-              {discountAmount > 0 ? `−₹${discountAmount}` : 'Discount'}
+              {safeDiscount > 0 ? `−₹${safeDiscount}` : 'Discount'}
             </button>
 
-            {/* Clear */}
             {cart.length > 0 && (
               <button onClick={clearPOS} className="text-xs text-red-400 underline ml-auto">
                 Clear
@@ -725,7 +660,6 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
           </div>
         </div>
 
-        {/* Huge Dual Payment Action Buttons (`.paybtns`) */}
         <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#3A352E]">
           <button
             disabled={cart.length === 0}
@@ -745,7 +679,7 @@ export default function CounterPOS({ vendorId }: { vendorId: string }) {
         </div>
       </div>
 
-      {/* Discount Bottom Sheet Modal (`.sheet`) */}
+      {/* Discount Bottom Sheet Modal */}
       {showDiscountSheet && (
         <div
           onClick={() => setShowDiscountSheet(false)}

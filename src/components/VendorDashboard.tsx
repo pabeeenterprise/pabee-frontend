@@ -59,24 +59,35 @@ const switchTab = (tab: 'orders' | 'counter' | 'menu' | 'money' | 'more') => {
     activeTabRef.current = activeTab;
   }, [activeTab]);
 
-  // 1. Link Clerk Auth to Prisma Database
+  // 1. Link Clerk Auth to Prisma Database via authenticated bootstrap
   useEffect(() => {
-    if (userId) {
-      fetch(`${API_URL}/api/vendors/${userId}/profile`)
-        .then((res) => {
-          if (!res.ok) throw new Error('Profile not found');
-          return res.json();
-        })
-        .then((data) => {
+    if (!userId) return;
+    let cancelled = false;
+
+    const syncVendorSession = async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_URL}/api/vendor/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error('Vendor session failed');
+        const data = await res.json();
+        if (!cancelled) {
           setRealVendorId(data.id);
           if (data.name) setVendorName(data.name);
-        })
-        .catch((err) => {
-          console.error('Database sync error:', err);
-          setRealVendorId(defaultVendorId);
-        });
-    }
-  }, [userId, defaultVendorId, API_URL]);
+        }
+      } catch (err) {
+        console.error('Database sync error:', err);
+        if (!cancelled) setRealVendorId(defaultVendorId);
+      }
+    };
+
+    syncVendorSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, defaultVendorId, API_URL, getToken]);
 
   // 2. Unlock Browser Web Audio API on first user click/tap
   useEffect(() => {
@@ -337,10 +348,10 @@ const switchTab = (tab: 'orders' | 'counter' | 'menu' | 'money' | 'more') => {
                   <Suspense fallback={<div className="p-8 text-center text-xs text-[#9A9184]">Loading module…</div>}>
   {moreSubTab === 'analytics' && <Analytics vendorId={realVendorId} />}
   {moreSubTab === 'offers' && <OffersPromos vendorId={realVendorId} />}
-  {moreSubTab === 'branding' && <BrandingStudio vendorId={userId} />}
+  {moreSubTab === 'branding' && <BrandingStudio vendorId={realVendorId} />}
   {moreSubTab === 'payment-settings' && <PaymentSettings vendorId={realVendorId} />}
-  {moreSubTab === 'qr-code' && <MyQRCode vendorId={userId} />}
-  {moreSubTab === 'settings' && <Settings vendorId={userId} />}
+  {moreSubTab === 'qr-code' && <MyQRCode vendorId={realVendorId} />}
+  {moreSubTab === 'settings' && <Settings vendorId={realVendorId} />}
 </Suspense>
 
                   {moreSubTab === 'sounds' && (

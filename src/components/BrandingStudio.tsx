@@ -94,6 +94,7 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
       return;
     }
 
+    const previousUrl = target === 'logo' ? logoUrl : bannerUrl;
     const instantLocalUrl = URL.createObjectURL(file);
     if (target === 'logo') setLogoUrl(instantLocalUrl);
     if (target === 'banner') setBannerUrl(instantLocalUrl);
@@ -102,7 +103,7 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${vendorId}-${target}-${Date.now()}.${fileExt}`;
-      
+
       const { error: uploadError } = await supabase.storage
         .from('vendor-assets')
         .upload(fileName, file);
@@ -110,15 +111,18 @@ export default function BrandingStudio({ vendorId }: { vendorId: string }) {
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from('vendor-assets').getPublicUrl(fileName);
-      
+
       if (target === 'logo') setLogoUrl(data.publicUrl);
       if (target === 'banner') setBannerUrl(data.publicUrl);
-      
+
       toast.success(`${target === 'logo' ? 'Logo' : 'Banner'} uploaded! Click 'Save Branding' to lock it in.`);
     } catch (err) {
       console.error("Upload pipeline failed:", err);
-      toast.error("Storage upload failed. Check console.");
+      if (target === 'logo') setLogoUrl(previousUrl);
+      if (target === 'banner') setBannerUrl(previousUrl);
+      toast.error("Storage upload failed. Reverted to previous image.");
     } finally {
+      URL.revokeObjectURL(instantLocalUrl);
       setIsUploading(false);
     }
   };

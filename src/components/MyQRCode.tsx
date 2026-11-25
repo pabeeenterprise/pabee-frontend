@@ -6,8 +6,11 @@ export default function MyQRCode({ vendorId }: { vendorId: string }) {
   const [vendorName, setVendorName] = useState('Loading...');
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://project-r73rm.vercel.app';
-  const qrPayload = `${baseUrl}/?vendor=${vendorId}&table=${tableId}`;
+  const rawBaseUrl =
+  import.meta.env.VITE_PUBLIC_APP_URL ||
+  (typeof window !== 'undefined' ? window.location.origin : 'https://project-r73rm.vercel.app');
+const baseUrl = rawBaseUrl.replace(/\/$/, '');
+const qrPayload = `${baseUrl}/?vendor=${encodeURIComponent(vendorId)}&table=${encodeURIComponent(tableId)}`;
 
   useEffect(() => {
     const fetchProfile = async () => {

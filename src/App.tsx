@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { CartProvider } from './context/CartContext';
 import CustomerMenu from './components/CustomerMenu';
@@ -9,20 +9,41 @@ const QRScanner = lazy(() => import('./components/QRScanner'));
 const VendorPortal = lazy(() => import('./components/VendorPortal'));
 
 function getInitialRoute() {
+  const pathname = window.location.pathname.replace(/\/+$/, '').toLowerCase();
   const params = new URLSearchParams(window.location.search);
-  const isAdmin = params.get('admin') === 'true';
   const scannedVendor = params.get('vendor');
   const scannedTable = params.get('table');
+  const hadLegacyAdminParam = params.has('admin');
 
+  // 1. Table QR scan (?vendor=<UUID>&table=Table-1) -> Customer Menu
+  if (scannedVendor) {
+    return {
+      isVendorPortal: false,
+      hadLegacyAdminParam: false,
+      vendorId: scannedVendor,
+      tableId: scannedTable || 'Table-Unknown',
+      initialView: 'menu' as const,
+    };
+  }
+
+  // 2. Explicit /scan path -> In-browser QR Scanner
+  if (pathname === '/scan') {
+    return {
+      isVendorPortal: false,
+      hadLegacyAdminParam: false,
+      vendorId: 'spice-street-kitchen',
+      tableId: 'Table-Unknown',
+      initialView: 'scanner' as const,
+    };
+  }
+
+  // 3. Root domain (orderustaad.com) and /dashboard or /pos -> Vendor Portal
   return {
-    isAdmin,
-    vendorId: scannedVendor || 'spice-street-kitchen',
-    tableId: scannedTable || 'Table-Unknown',
-    initialView: isAdmin
-      ? ('dashboard' as const)
-      : scannedVendor
-      ? ('menu' as const)
-      : ('scanner' as const),
+    isVendorPortal: true,
+    hadLegacyAdminParam,
+    vendorId: 'spice-street-kitchen',
+    tableId: 'Table-Unknown',
+    initialView: 'dashboard' as const,
   };
 }
 
@@ -33,7 +54,13 @@ function App() {
   );
   const [vendorId, setVendorId] = useState(initial.vendorId);
   const [tableId, setTableId] = useState(initial.tableId);
-  const isAdminMode = initial.isAdmin;
+
+  // Clean up old ?admin=true bookmarks so the address bar stays clean
+  useEffect(() => {
+    if (initial.hadLegacyAdminParam) {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [initial.hadLegacyAdminParam]);
 
   const handleScanSuccess = (scannedVendor: string, scannedTable: string) => {
     setVendorId(scannedVendor);
@@ -47,7 +74,7 @@ function App() {
     </div>
   );
 
-  if (isAdminMode) {
+  if (initial.isVendorPortal) {
     return (
       <>
         <Toaster position="top-center" toastOptions={{ duration: 3000 }} />

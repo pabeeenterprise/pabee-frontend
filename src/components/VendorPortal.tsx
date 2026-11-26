@@ -15,8 +15,8 @@ export default function VendorPortal({ vendorId }: { vendorId: string }) {
           <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a] p-4">
             <SignIn
               routing="virtual"
-              fallbackRedirectUrl="/?admin=true"
-              signUpFallbackRedirectUrl="/?admin=true"
+              fallbackRedirectUrl="/"
+              signUpFallbackRedirectUrl="/"
             />
           </div>
         </SignedOut>

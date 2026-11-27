@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth } from "@clerk/react";
 
 type MenuItem = {
   id: string;

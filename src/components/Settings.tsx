@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { useUser, useAuth } from '@clerk/clerk-react';
+import { useUser, useAuth } from "@clerk/react";
 
 export default function Settings({ vendorId }: { vendorId: string }) {
   const [isLoading, setIsLoading] = useState(true);

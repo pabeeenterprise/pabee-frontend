@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth } from "@clerk/react";
 
 // 🌟 NEW: The exact structure of your database items
 interface PreviewItem {

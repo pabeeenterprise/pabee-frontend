@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth } from "@clerk/react";
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 

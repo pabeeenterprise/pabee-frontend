@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth } from "@clerk/react";
 
 // 🚨 We add a 'locked' boolean to physically show the worker what is off-limits
 const NAV_ITEMS = [

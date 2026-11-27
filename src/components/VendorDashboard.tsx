@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
-import { useAuth, UserButton } from '@clerk/clerk-react';
+import { useAuth, UserButton } from "@clerk/react";
 import toast from 'react-hot-toast';
 import LiveOrders, { type Order } from './LiveOrders';
 import Overview from './Overview';

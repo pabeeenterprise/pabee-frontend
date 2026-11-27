@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth } from "@clerk/react";
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
